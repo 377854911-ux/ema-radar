@@ -80,15 +80,10 @@ function analyze(candles,series,index,prevIndex,activeIndicators=INDICATORS){con
  if(emaValues.every(Number.isFinite)){
   // EMA重新站上信号：只检查最新已收盘K线，并要求前一根收盘价低于三条EMA、当前收盘价高于三条EMA。
   // 同时要求MACD处于即将金叉、刚刚金叉或金叉后的多头状态。
-  if(index===candles.length-2&&activeIndicators.includes('macd')){
+  if(index===candles.length-2){
    const prevEma=[series.ema.fast[prevIndex],series.ema.mid[prevIndex],series.ema.slow[prevIndex]];
-   const d=series.macd.dif[index],dea=series.macd.dea[index],pd=series.macd.dif[prevIndex],pdea=series.macd.dea[prevIndex];
-   const macdFinite=[d,dea,pd,pdea].every(Number.isFinite);
-   const nearGolden=macdFinite&&d<=dea&&Math.abs(d-dea)/Math.max(Math.abs(c.close),1e-12)<0.0015&&Math.abs(d-dea)<Math.abs(pd-pdea);
-   if(prevEma.every(Number.isFinite)&&p.close<prevEma[0]&&p.close<prevEma[1]&&p.close<prevEma[2]&&c.close>emaValues[0]&&c.close>emaValues[1]&&c.close>emaValues[2]&&macdFinite&&(d>dea||nearGolden)){
-    const macdState=d>dea?(pd<=pdea?'MACD已金叉':'MACD金叉后多头延续'):'MACD即将金叉';
-    addSignal(out,'ema-reclaim-bull','价格重新站上 EMA'+ep.fast+'/'+ep.mid+'/'+ep.slow,'confirmed',c.time,'前一根收盘价低于三条EMA，当前已收盘K线收盘价同时站上三条EMA；'+macdState);
-   }
+   if(prevEma.every(Number.isFinite)&&p.close<prevEma[0]&&p.close<prevEma[1]&&p.close<prevEma[2]&&c.close>emaValues[0]&&c.close>emaValues[1]&&c.close>emaValues[2])
+    addSignal(out,'ema-reclaim-bull','价格重新站上 EMA'+ep.fast+'/'+ep.mid+'/'+ep.slow,'confirmed',c.time,'前一根收盘价低于三条EMA，当前已收盘K线收盘价同时站上三条EMA');
   }
   if(emaValues[0]>emaValues[1]&&emaValues[1]>emaValues[2]&&!(series.ema.fast[prevIndex]>series.ema.mid[prevIndex]&&series.ema.mid[prevIndex]>series.ema.slow[prevIndex]))addSignal(out,'ema-stack-bull','EMA'+ep.fast+'/'+ep.mid+'/'+ep.slow+' 多头排列','confirmed',c.time,'刚刚形成EMA多头排列');
   if(emaValues[0]<emaValues[1]&&emaValues[1]<emaValues[2]&&!(series.ema.fast[prevIndex]<series.ema.mid[prevIndex]&&series.ema.mid[prevIndex]<series.ema.slow[prevIndex]))addSignal(out,'ema-stack-bear','EMA'+ep.fast+'/'+ep.mid+'/'+ep.slow+' 空头排列','confirmed',c.time,'刚刚形成EMA空头排列');
@@ -123,6 +118,13 @@ function analyze(candles,series,index,prevIndex,activeIndicators=INDICATORS){con
  }
  if(activeIndicators.includes('macd')){
  const d=series.macd.dif[index],e=series.macd.dea[index],pd=series.macd.dif[prevIndex],pe=series.macd.dea[prevIndex];
+ if(index===candles.length-2&&[d,e,pd,pe].every(Number.isFinite)){
+  const nearGolden=d<=e&&Math.abs(d-e)/Math.max(Math.abs(c.close),1e-12)<0.0015&&Math.abs(d-e)<Math.abs(pd-pe);
+  if(d>e||nearGolden){
+   const state=d>e?(pd<=pe?'MACD已金叉':'MACD金叉后多头延续'):'MACD即将金叉';
+   addSignal(out,'macd-bull-state',state,'confirmed',c.time,'最新一根已收盘K线的DIF与DEA关系：'+state);
+  }
+ }
  if([d,e,pd,pe].every(Number.isFinite)){
   if(pd<=pe&&d>e)addSignal(out,'macd-cross-bull','MACD 金叉（多头）','confirmed',c.time,'DIF 上穿 DEA');
   else if(pd>=pe&&d<e)addSignal(out,'macd-cross-bear','MACD 死叉（空头）','confirmed',c.time,'DIF 下穿 DEA');
@@ -132,8 +134,8 @@ function analyze(candles,series,index,prevIndex,activeIndicators=INDICATORS){con
    addSignal(out,'macd-near-bear','MACD 即将死叉（空头预警）','forming',c.time,'DIF 与 DEA 靠拢，关注向下突破');
  }
  }
- // 扫描结果只保留同时满足 EMA 三线重新站上、MACD 条件及最新已收盘K线确认的组合信号。
- return out.filter(signal=>signal.type==='ema-reclaim-bull');
+ // 扫描结果只显示三项独立结果：EMA重新站上、MA重新站上、MACD多头状态；不显示第四项综合信号。
+ return out.filter(signal=>['ema-reclaim-bull','ma-reclaim-bull','macd-bull-state'].includes(signal.type));
 }
 async function refreshTop(){const [info,tickers]=await Promise.all([getJSON(BASE+'/fapi/v1/exchangeInfo'),getJSON(BASE+'/fapi/v1/ticker/24hr')]);const eligible=new Set(info.symbols.filter(s=>s.status==='TRADING'&&s.contractType==='PERPETUAL'&&s.quoteAsset==='USDT').map(s=>s.symbol));topSymbols=tickers.filter(t=>eligible.has(t.symbol)).sort((a,b)=>Number(b.quoteVolume)-Number(a.quoteVolume)).slice(0,100).map(t=>({symbol:t.symbol,quoteVolume:Number(t.quoteVolume),lastPrice:Number(t.lastPrice)}));lastTop=Date.now();}
 function renderHistory(){const count=history.length;$('historyBtn').textContent='查看信号历史 ('+count+')';$('historyCount').textContent=count+' 条记录';if(!count){$('historyList').innerHTML='<div class="empty">暂无历史信号，开始扫描后会自动记录。</div>';return;}const rows=history.slice(0,200);$('historyList').innerHTML=rows.map(h=>{const when=new Date(Number(h.time)).toLocaleString('zh-CN',{month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'});const state=h.state==='confirmed'?'已确认':'形成中预警';return '<div class="history-row"><div class="history-top"><span class="history-symbol">'+h.symbol+' · '+LABELS[h.interval]+'</span><span class="history-time">'+when+'</span></div><div class="history-meta">'+h.label+' · '+state+'</div></div>';}).join('');if(count>200)$('historyList').insertAdjacentHTML('beforeend','<div class="empty">仅显示最近 200 条；本机共保存 '+count+' 条。</div>');}

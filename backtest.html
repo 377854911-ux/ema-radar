@@ -44,11 +44,21 @@ main{max-width:960px;margin:auto}.top{padding:20px 2px 14px}.back{display:inline
 <div class="section"><h2>历史信号明细</h2><span class="muted" id="detailCount">0 条</span></div><section class="panel tablewrap"><table class="table"><thead><tr><th>交易对</th><th>模型</th><th>止盈策略</th><th>方向</th><th>信号时间</th><th>入场价</th><th>出场价</th><th>净收益 / 出场原因</th><th>仓位（USDT）</th><th>盈亏（USDT）</th><th>最大有利</th><th>最大不利</th></tr></thead><tbody id="details"><tr><td colspan="12" class="empty">回测完成后显示</td></tr></tbody></table></section>
 </main>
 <script>
+(function(){
+  function report(message){
+    var el=document.getElementById('status');
+    if(el) el.textContent='页面脚本异常：'+String(message||'未知错误');
+  }
+  window.addEventListener('error',function(e){report(e.message||e.error||'脚本加载失败');});
+  window.addEventListener('unhandledrejection',function(e){var r=e.reason;report(r&&r.message?r.message:r||'异步任务失败');});
+})();
+</script>
+<script>
 const API='https://fapi.binance.com', $=id=>document.getElementById(id);
 const DEFAULT={ema:{fast:25,mid:50,slow:100},ma:{fast:5,mid:10,slow:30},macd:{fast:12,slow:26,signal:9}};
 let settings=load('emaRadarIndicatorSettings',DEFAULT),simple=load('simpleRadarIndicatorParams',{ema:[25,50,100],ma:[5,10,30]});
 let stopRequested=false,running=false,rows=[],taskDone=0,taskTotal=0;
-function load(k,d){try{return Object.assign(structuredClone(d),JSON.parse(localStorage.getItem(k)||'{}'));}catch(e){return structuredClone(d);}}
+function cloneDefault(d){try{if(typeof structuredClone==='function')return structuredClone(d);}catch(e){}return JSON.parse(JSON.stringify(d));}\nfunction load(k,d){try{return Object.assign(cloneDefault(d),JSON.parse(localStorage.getItem(k)||'{}'));}catch(e){return cloneDefault(d);}}
 function getSimple(){try{const x=JSON.parse(localStorage.getItem('simpleRadarIndicatorParams')||'null');return {ema:Array.isArray(x?.ema)&&x.ema.length===3?x.ema:[25,50,100],ma:Array.isArray(x?.ma)&&x.ma.length===3?x.ma:[5,10,30]};}catch(e){return {ema:[25,50,100],ma:[5,10,30]};}}
 const activeRequests=new Set();async function get(url){let last;for(let attempt=0;attempt<3;attempt++){if(stopRequested)throw Error('已停止');const controller=new AbortController();activeRequests.add(controller);const timer=setTimeout(()=>controller.abort(),18000);try{const r=await fetch(url,{cache:'no-store',signal:controller.signal});if(!r.ok){const err=Error('行情请求失败 HTTP '+r.status);err.status=r.status;if(r.status===418||r.status===429||r.status>=500){last=err;const retry=Number(r.headers.get('Retry-After'));await sleep(Math.max(800*(attempt+1),Number.isFinite(retry)&&retry>0?retry*1000:0));continue;}throw err;}return await r.json();}catch(e){last=e;if(stopRequested)throw Error('已停止');if(e.status&&e.status!==418&&e.status!==429&&e.status<500)throw e;if(attempt<2)await sleep(700*(attempt+1));}finally{clearTimeout(timer);activeRequests.delete(controller);}}throw last||Error('行情请求连续失败');}
 const sleep=ms=>new Promise(r=>setTimeout(r,ms));
@@ -103,5 +113,16 @@ function render(){const capital=Number($('capital').value),positionPct=Number($(
 for(const strategy of [...new Set(rows.map(x=>x.strategy))])simulate(rows.filter(x=>x.strategy===strategy),capital,positionPct);const detail=rows.slice().sort((a,b)=>b.time-a.time).slice(0,500);$('detailCount').textContent=rows.length+' 条（有效 '+closed.length+'；顺序不明 '+ambiguous+'；止损无效 '+invalid+'；最多展示最近500条）';$('details').innerHTML=detail.length?detail.map(x=>{const state=x.status==='ambiguous'?'顺序不明':x.status==='invalid-stop'?'止损无效':x.exitReason;return '<tr><td>'+x.symbol+'</td><td class="model-'+x.model+'">'+names[x.model]+'</td><td>'+tpNames[x.strategy]+'</td><td class="'+(x.direction==='bull'?'positive':'negative')+'">'+(x.direction==='bull'?'↑ 多头':'↓ 空头')+'</td><td>'+new Date(x.time).toLocaleString()+'</td><td>'+x.entry+'</td><td>'+(Number.isFinite(x.exit)?x.exit:'—')+'</td><td class="'+(Number.isFinite(x.net)&&x.net>=0?'positive':'negative')+'">'+(Number.isFinite(x.net)?pct(x.net):state)+'</td><td>'+(Number.isFinite(x.positionUsdt)?x.positionUsdt.toFixed(2):'—')+'</td><td>'+(Number.isFinite(x.pnlUsdt)?x.pnlUsdt.toFixed(2):'—')+'</td><td>+'+(x.favorable||0).toFixed(2)+'%</td><td>'+(x.adverse||0).toFixed(2)+'%</td></tr>';}).join(''):'<tr><td colspan="12" class="empty">没有有效信号</td></tr>';}
 
 function exportCSV(){const head=['symbol','model','take_profit_strategy','direction','signal_time','entry','exit','net_return_pct','exit_reason','position_usdt','pnl_usdt','equity_after_usdt','funding_cost_pct','max_favorable_pct','max_adverse_pct'];const lines=[head.join(','),...rows.map(x=>[x.symbol,x.model,x.strategy,x.direction,new Date(x.time).toISOString(),x.entry,Number.isFinite(x.exit)?x.exit:'',Number.isFinite(x.net)?x.net.toFixed(4):'',x.exitReason||x.status,x.positionUsdt?.toFixed(2)||'',x.pnlUsdt?.toFixed(2)||'',x.equityAfter?.toFixed(2)||'',(x.fundingCost??0).toFixed(4),(x.favorable||0).toFixed(4),(x.adverse||0).toFixed(4)].join(','))];const blob=new Blob(['\ufeff'+lines.join('\n')],{type:'text/csv;charset=utf-8'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='ema-radar-backtest.csv';a.click();URL.revokeObjectURL(url);}
-$('start').onclick=run;$('stop').onclick=()=>{stopRequested=true;for(const c of activeRequests)c.abort();$('status').textContent='正在停止并取消网络请求…';};$('export').onclick=exportCSV;
+try{
+ const startButton=$('start'),stopButton=$('stop'),exportButton=$('export');
+ if(!startButton||!stopButton||!exportButton)throw new Error('页面按钮元素缺失，请刷新页面');
+ startButton.addEventListener('click',function(){
+  $('status').textContent='正在启动历史回溯，请稍候…';
+  try{const task=run();Promise.resolve(task).catch(function(e){$('status').textContent='回测启动失败：'+(e&&e.message?e.message:String(e));startButton.disabled=false;});}
+  catch(e){$('status').textContent='回测启动失败：'+(e&&e.message?e.message:String(e));startButton.disabled=false;}
+ });
+ stopButton.addEventListener('click',()=>{stopRequested=true;for(const c of activeRequests)c.abort();$('status').textContent='正在停止并取消网络请求…';});
+ exportButton.addEventListener('click',exportCSV);
+ $('status').textContent='页面脚本已就绪，请选择模型后点击“开始历史回溯”。';
+}catch(e){const status=$('status');if(status)status.textContent='页面初始化失败：'+(e&&e.message?e.message:String(e));}
 </script></main></body></html>

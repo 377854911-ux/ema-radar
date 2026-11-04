@@ -25,7 +25,6 @@ main{max-width:920px;margin:0 auto}.top{padding:20px 2px 14px}.eyebrow{color:var
  <div class="title">EMA 7周期共振雷达</div>
  <div class="sub">扫描 USDT 永续合约成交额前 100 · EMA / MA / MACD · 7个周期</div>
  <div class="sub" style="margin-top:9px"><a href="./simple-models.html" style="color:#9fc2ff;font-weight:700">打开独立双模型扫描器 →</a></div>
- <div class="sub" style="margin-top:9px"><a href="./simple-models.html" style="color:#9fc2ff;font-weight:700">打开独立双模型扫描器 →</a></div>
  <div class="statusbar"><span class="pill"><i class="dot" id="dot"></i><span id="status">尚未开始扫描</span></span><span class="pill" id="updated">等待行情数据</span></div>
 </header>
 <section class="panel">
@@ -79,8 +78,8 @@ function analyze(candles,series,index,prevIndex,activeIndicators=INDICATORS){con
  if(activeIndicators.includes('ema')){
  const ep=indicatorSettings.ema,emaValues=[series.ema.fast[index],series.ema.mid[index],series.ema.slow[index]];
  if(emaValues.every(Number.isFinite)){
-  if(emaValues[0]>emaValues[1]&&emaValues[1]>emaValues[2])addSignal(out,'ema-stack-bull','EMA'+ep.fast+'/'+ep.mid+'/'+ep.slow+' 多头排列','confirmed',c.time,'EMA'+ep.fast+' > EMA'+ep.mid+' > EMA'+ep.slow);
-  if(emaValues[0]<emaValues[1]&&emaValues[1]<emaValues[2])addSignal(out,'ema-stack-bear','EMA'+ep.fast+'/'+ep.mid+'/'+ep.slow+' 空头排列','confirmed',c.time,'EMA'+ep.fast+' < EMA'+ep.mid+' < EMA'+ep.slow);
+  if(emaValues[0]>emaValues[1]&&emaValues[1]>emaValues[2]&&!(series.ema.fast[prevIndex]>series.ema.mid[prevIndex]&&series.ema.mid[prevIndex]>series.ema.slow[prevIndex]))addSignal(out,'ema-stack-bull','EMA'+ep.fast+'/'+ep.mid+'/'+ep.slow+' 多头排列','confirmed',c.time,'刚刚形成EMA多头排列');
+  if(emaValues[0]<emaValues[1]&&emaValues[1]<emaValues[2]&&!(series.ema.fast[prevIndex]<series.ema.mid[prevIndex]&&series.ema.mid[prevIndex]<series.ema.slow[prevIndex]))addSignal(out,'ema-stack-bear','EMA'+ep.fast+'/'+ep.mid+'/'+ep.slow+' 空头排列','confirmed',c.time,'刚刚形成EMA空头排列');
  }
  if(bullish&&emaValues.every(v=>Number.isFinite(v)&&v>c.open&&v<c.close))
   addSignal(out,'ema-body-bull','EMA'+ep.fast+'/'+ep.mid+'/'+ep.slow+' 多头阳线共振','confirmed',c.time,'三条EMA同时位于阳线实体内');
@@ -89,9 +88,9 @@ function analyze(candles,series,index,prevIndex,activeIndicators=INDICATORS){con
  const a=series.ema.fast[index],b=series.ema.mid[index],pa=series.ema.fast[prevIndex],pb=series.ema.mid[prevIndex];
  if([a,b,pa,pb].every(Number.isFinite)){
   if(pa<=pb&&a>b)addSignal(out,'ema-cross-bull','EMA'+ep.fast+' 上穿 EMA'+ep.mid+'（多头）','confirmed',c.time,'本周期刚刚向上穿越');
-  else if(a>b)addSignal(out,'ema-above-bull','EMA'+ep.fast+' 高于 EMA'+ep.mid+'（多头）','confirmed',c.time,'短期EMA位于长期EMA上方');
+  
   else if(pa>=pb&&a<b)addSignal(out,'ema-cross-bear','EMA'+ep.fast+' 下穿 EMA'+ep.mid+'（空头）','confirmed',c.time,'本周期刚刚向下穿越');
-  else if(a<b)addSignal(out,'ema-below-bear','EMA'+ep.fast+' 低于 EMA'+ep.mid+'（空头）','confirmed',c.time,'短期EMA位于长期EMA下方');
+  
   if(a<=b&&nearBelow(a,b,pa,pb,0.0025))addSignal(out,'ema-near-bull','EMA'+ep.fast+'/'+ep.mid+' 即将上穿（多头预警）','forming',c.time,'两线距离收窄，关注向上突破');
   if(a>=b&&nearBelow(b,a,pb,pa,0.0025))addSignal(out,'ema-near-bear','EMA'+ep.fast+'/'+ep.mid+' 即将下穿（空头预警）','forming',c.time,'两线距离收窄，关注向下突破');
  }
@@ -99,8 +98,8 @@ function analyze(candles,series,index,prevIndex,activeIndicators=INDICATORS){con
  if(activeIndicators.includes('ma')){
  const mp=indicatorSettings.ma,m5=series.ma.fast[index],m10=series.ma.mid[index],m30=series.ma.slow[index],q5=series.ma.fast[prevIndex],q10=series.ma.mid[prevIndex],q30=series.ma.slow[prevIndex];
  if([m5,m10,m30,q5,q10,q30].every(Number.isFinite)){
-  if(m5>m10&&m10>m30)addSignal(out,'ma-stack-bull','MA'+mp.fast+'/'+mp.mid+'/'+mp.slow+' 多头排列','confirmed',c.time,'MA'+mp.fast+' > MA'+mp.mid+' > MA'+mp.slow);
-  if(m5<m10&&m10<m30)addSignal(out,'ma-stack-bear','MA'+mp.fast+'/'+mp.mid+'/'+mp.slow+' 空头排列','confirmed',c.time,'MA'+mp.fast+' < MA'+mp.mid+' < MA'+mp.slow);
+  if(m5>m10&&m10>m30&&!(q5>q10&&q10>q30))addSignal(out,'ma-stack-bull','MA'+mp.fast+'/'+mp.mid+'/'+mp.slow+' 多头排列','confirmed',c.time,'刚刚形成MA多头排列');
+  if(m5<m10&&m10<m30&&!(q5<q10&&q10<q30))addSignal(out,'ma-stack-bear','MA'+mp.fast+'/'+mp.mid+'/'+mp.slow+' 空头排列','confirmed',c.time,'刚刚形成MA空头排列');
   if(m5<=m10&&nearBelow(m5,m10,q5,q10,0.003)&&((m10-m5)/Math.max(Math.abs(m10),1e-12))<0.003)
    addSignal(out,'ma-near-bull','MA'+mp.fast+'/'+mp.mid+' 即将金叉（多头预警）','forming',c.time,'MA'+mp.fast+' 与 MA'+mp.mid+' 靠拢，关注向上突破');
   if(m5>=m10&&nearBelow(m10,m5,q10,q5,0.003)&&((m5-m10)/Math.max(Math.abs(m5),1e-12))<0.003)
@@ -124,7 +123,7 @@ async function refreshTop(){const [info,tickers]=await Promise.all([getJSON(BASE
 function renderHistory(){const count=history.length;$('historyBtn').textContent='查看信号历史 ('+count+')';$('historyCount').textContent=count+' 条记录';if(!count){$('historyList').innerHTML='<div class="empty">暂无历史信号，开始扫描后会自动记录。</div>';return;}const rows=history.slice(0,200);$('historyList').innerHTML=rows.map(h=>{const when=new Date(Number(h.time)).toLocaleString('zh-CN',{month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'});const state=h.state==='confirmed'?'已确认':'形成中预警';return '<div class="history-row"><div class="history-top"><span class="history-symbol">'+h.symbol+' · '+LABELS[h.interval]+'</span><span class="history-time">'+when+'</span></div><div class="history-meta">'+h.label+' · '+state+'</div></div>';}).join('');if(count>200)$('historyList').insertAdjacentHTML('beforeend','<div class="empty">仅显示最近 200 条；本机共保存 '+count+' 条。</div>');}
 function recordSignals(symbol,interval,signals){let fresh=0;for(const s of signals){const key=[symbol,interval,s.type,s.time].join('|');if(!history.some(x=>x.key===key)){history.unshift({key,symbol,interval,type:s.type,label:s.label,state:s.state,time:s.time,seenAt:Date.now()});fresh++;}}if(history.length>1500)history=history.slice(0,1500);try{localStorage.setItem('emaRadarHistory',JSON.stringify(history));}catch(e){}renderHistory();if(fresh)beep();}
 function beep(){if(!soundOn||!audioCtx)return;try{const now=audioCtx.currentTime;[0,0.22].forEach((delay,i)=>{const osc=audioCtx.createOscillator(),gain=audioCtx.createGain();osc.type='sine';osc.frequency.value=i?1046:784;gain.gain.setValueAtTime(0.0001,now+delay);gain.gain.exponentialRampToValueAtTime(0.16,now+delay+0.02);gain.gain.exponentialRampToValueAtTime(0.0001,now+delay+0.16);osc.connect(gain);gain.connect(audioCtx.destination);osc.start(now+delay);osc.stop(now+delay+0.18);});}catch(e){}}
-async function scanOne(item,interval){try{const data=await getJSON(BASE+'/fapi/v1/klines?symbol='+item.symbol+'&interval='+interval+'&limit=200');const candles=data.map(k=>({time:k[0],open:+k[1],high:+k[2],low:+k[3],close:+k[4],closeTime:k[6]}));const closes=candles.map(c=>c.close);const series={ema:{fast:emaSeries(closes,indicatorSettings.ema.fast),mid:emaSeries(closes,indicatorSettings.ema.mid),slow:emaSeries(closes,indicatorSettings.ema.slow)},ma:{fast:smaSeries(closes,indicatorSettings.ma.fast),mid:smaSeries(closes,indicatorSettings.ma.mid),slow:smaSeries(closes,indicatorSettings.ma.slow)},macd:macdSeries(closes,indicatorSettings.macd)};const closed=candles.length-2,live=candles.length-1;const closedSignals=analyze(candles,series,closed,closed-1,selectedIndicators),liveSignals=analyze(candles,series,live,closed,selectedIndicators);const signals=closedSignals.concat(liveSignals.filter(s=>s.state==='forming'&&!closedSignals.some(x=>x.type===s.type)));recordSignals(item.symbol,interval,signals);if(signals.length)return {symbol:item.symbol,interval,signals,confirmed:signals.some(s=>s.state==='confirmed'),forming:signals.some(s=>s.state==='forming'),price:item.lastPrice,quoteVolume:item.quoteVolume,barTime:candles[closed].time};}catch(e){return {error:true,symbol:item.symbol,interval,message:e.message};}return null;}
+async function scanOne(item,interval){try{const data=await getJSON(BASE+'/fapi/v1/klines?symbol='+item.symbol+'&interval='+interval+'&limit=200');const candles=data.map(k=>({time:k[0],open:+k[1],high:+k[2],low:+k[3],close:+k[4],closeTime:k[6]}));const closes=candles.map(c=>c.close);const series={ema:{fast:emaSeries(closes,indicatorSettings.ema.fast),mid:emaSeries(closes,indicatorSettings.ema.mid),slow:emaSeries(closes,indicatorSettings.ema.slow)},ma:{fast:smaSeries(closes,indicatorSettings.ma.fast),mid:smaSeries(closes,indicatorSettings.ma.mid),slow:smaSeries(closes,indicatorSettings.ma.slow)},macd:macdSeries(closes,indicatorSettings.macd)};const closed=candles.length-2,live=candles.length-1;const closedSignals=analyze(candles,series,closed,closed-1,selectedIndicators),liveSignals=analyze(candles,series,live,closed,selectedIndicators).map(s=>({...s,state:'forming'}));const signals=closedSignals.concat(liveSignals.filter(s=>!closedSignals.some(x=>x.type===s.type)));recordSignals(item.symbol,interval,signals);if(signals.length)return {symbol:item.symbol,interval,signals,confirmed:signals.some(s=>s.state==='confirmed'),forming:signals.some(s=>s.state==='forming'),price:item.lastPrice,quoteVolume:item.quoteVolume,barTime:candles[closed].time};}catch(e){return {error:true,symbol:item.symbol,interval,message:e.message};}return null;}
 function getResonance(g){
  const sides={bull:{intervals:new Set(),indicators:new Set(),latest:0},bear:{intervals:new Set(),indicators:new Set(),latest:0}};
  for(const r of g.signals)for(const z of r.signals){

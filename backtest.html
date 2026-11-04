@@ -30,7 +30,7 @@ main{max-width:960px;margin:auto}.top{padding:20px 2px 14px}.back{display:inline
  <div class="label" style="margin-top:14px">选择回测模型（可多选）</div>
  <div class="models" id="modelChoices"><label><input type="checkbox" value="big" checked> <b class="model-big">大模型</b></label><label><input type="checkbox" value="ema" checked> <b class="model-ema">EMA模型</b></label><label><input type="checkbox" value="ma" checked> <b class="model-ma">MA模型</b></label></div>
  <div class="field"><label for="universe">回测交易对范围</label><select id="universe"><option value="100" selected>当前成交额前100 USDT永续</option><option value="50">当前成交额前50</option><option value="20">当前成交额前20</option></select></div>
- <div class="actions"><button type="button" class="btn" id="start" onclick="document.getElementById('status').textContent='按钮已触发，正在启动回测…';try{var task=run();if(task&&typeof task.catch==='function')task.catch(function(e){document.getElementById('status').textContent='回测启动失败：'+(e&&e.message?e.message:String(e));});}catch(e){document.getElementById('status').textContent='回测启动失败：'+(e&&e.message?e.message:String(e));}">开始历史回溯</button><button class="btn secondary" id="stop" disabled>停止</button><button class="btn secondary" id="export" disabled>导出CSV</button></div>
+ <div class="actions"><button type="button" class="btn" id="start" onclick="window.startBacktest ? window.startBacktest() : (document.getElementById('status').textContent='页面尚未初始化，请刷新页面')">开始历史回溯</button><button class="btn secondary" id="stop" disabled>停止</button><button class="btn secondary" id="export" disabled>导出CSV</button></div>
  <div class="bar"><i id="progress"></i></div><div class="status" id="status">默认：最近90天、1小时、前100个交易对、信号后3根K线评估；初始本金1000 USDT，每笔按当前权益的10%投入。可在设置中调整。</div>
  <div class="note">说明：为了避免未来数据泄漏，信号只在K线收盘后确认；进场价使用信号K线之后一根K线的开盘价；如先触发止盈或止损则提前退出，否则在所选持仓周期结束时按收盘价退出。止损固定为信号前一根已收盘K线低点（多头）/高点（空头）；止盈策略分别独立回测。若同一根K线同时触及止盈止损，将调用1分钟K线还原先后；仍无法判断则标记“顺序不明”，不计入胜率和收益。手续费双向收取；资金费率按历史实际记录或手动每8小时模拟。仓位按每笔进场时权益比例作为名义仓位估算；多笔交易按平仓时间顺序模拟，不锁定重叠持仓占用的保证金，因此资金曲线属于简化估算。交易对名单按回测开始时的当前成交额排名，并非历史每一天的前100，因此存在幸存者偏差。不同周期请分别运行。15分钟×365天×100个交易对会产生大量请求，建议先用30/90天验证。</div>
 </section>
@@ -117,7 +117,13 @@ function exportCSV(){const head=['symbol','model','take_profit_strategy','direct
 try{
  const startButton=$('start'),stopButton=$('stop'),exportButton=$('export');
  if(!startButton||!stopButton||!exportButton)throw new Error('页面按钮元素缺失，请刷新页面');
-  // Start button uses inline click handling for improved iPhone WebView compatibility.
+ window.startBacktest=()=>{
+   const status=$('status');
+   if(running){status.textContent='上一轮回测仍在运行，请先点“停止”或等待结束。';return;}
+   status.textContent='按钮已触发，正在启动回测…';
+   try{const task=run();if(task&&typeof task.catch==='function')task.catch(e=>{status.textContent='回测启动失败：'+(e&&e.message?e.message:String(e));});}
+   catch(e){status.textContent='回测启动失败：'+(e&&e.message?e.message:String(e));}
+ };
  stopButton.addEventListener('click',()=>{stopRequested=true;for(const c of activeRequests)c.abort();$('status').textContent='正在停止并取消网络请求…';});
  exportButton.addEventListener('click',exportCSV);
  $('status').textContent='页面脚本已就绪，请选择模型后点击“开始历史回溯”。';

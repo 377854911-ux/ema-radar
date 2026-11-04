@@ -78,6 +78,18 @@ function analyze(candles,series,index,prevIndex,activeIndicators=INDICATORS){con
  if(activeIndicators.includes('ema')){
  const ep=indicatorSettings.ema,emaValues=[series.ema.fast[index],series.ema.mid[index],series.ema.slow[index]];
  if(emaValues.every(Number.isFinite)){
+  // EMA重新站上信号：只检查最新已收盘K线，并要求前一根收盘价低于三条EMA、当前收盘价高于三条EMA。
+  // 同时要求MACD处于即将金叉、刚刚金叉或金叉后的多头状态。
+  if(index===candles.length-2&&activeIndicators.includes('macd')){
+   const prevEma=[series.ema.fast[prevIndex],series.ema.mid[prevIndex],series.ema.slow[prevIndex]];
+   const d=series.macd.dif[index],dea=series.macd.dea[index],pd=series.macd.dif[prevIndex],pdea=series.macd.dea[prevIndex];
+   const macdFinite=[d,dea,pd,pdea].every(Number.isFinite);
+   const nearGolden=macdFinite&&d<=dea&&Math.abs(d-dea)/Math.max(Math.abs(c.close),1e-12)<0.0015&&Math.abs(d-dea)<Math.abs(pd-pdea);
+   if(prevEma.every(Number.isFinite)&&p.close<prevEma[0]&&p.close<prevEma[1]&&p.close<prevEma[2]&&c.close>emaValues[0]&&c.close>emaValues[1]&&c.close>emaValues[2]&&macdFinite&&(d>dea||nearGolden)){
+    const macdState=d>dea?(pd<=pdea?'MACD已金叉':'MACD金叉后多头延续'):'MACD即将金叉';
+    addSignal(out,'ema-reclaim-bull','价格重新站上 EMA'+ep.fast+'/'+ep.mid+'/'+ep.slow,'confirmed',c.time,'前一根收盘价低于三条EMA，当前已收盘K线收盘价同时站上三条EMA；'+macdState);
+   }
+  }
   if(emaValues[0]>emaValues[1]&&emaValues[1]>emaValues[2]&&!(series.ema.fast[prevIndex]>series.ema.mid[prevIndex]&&series.ema.mid[prevIndex]>series.ema.slow[prevIndex]))addSignal(out,'ema-stack-bull','EMA'+ep.fast+'/'+ep.mid+'/'+ep.slow+' 多头排列','confirmed',c.time,'刚刚形成EMA多头排列');
   if(emaValues[0]<emaValues[1]&&emaValues[1]<emaValues[2]&&!(series.ema.fast[prevIndex]<series.ema.mid[prevIndex]&&series.ema.mid[prevIndex]<series.ema.slow[prevIndex]))addSignal(out,'ema-stack-bear','EMA'+ep.fast+'/'+ep.mid+'/'+ep.slow+' 空头排列','confirmed',c.time,'刚刚形成EMA空头排列');
  }

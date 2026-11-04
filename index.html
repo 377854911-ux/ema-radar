@@ -34,7 +34,7 @@ main{max-width:920px;margin:0 auto}.top{padding:20px 2px 14px}.eyebrow{color:var
  </div>
  <div class="progress"><i id="bar"></i></div>
  <div class="actions"><button class="btn" id="scanBtn">开始扫描</button><button class="btn secondary" id="pauseBtn" disabled>暂停自动刷新</button></div><div class="actions"><button class="btn secondary" id="soundBtn">开启铃声提醒</button><button class="btn secondary" id="historyBtn">查看信号历史 (0)</button></div>
- <div class="warning" style="margin-top:10px">保留原 EMA25/50/100 同处阳线实体信号；新增 EMA25/50 上穿、MA5/10/30 多头排列、MACD 金叉及临近预警。临近信号是技术条件提示，不代表必然发生。</div>
+ <div class="warning" style="margin-top:10px">双向识别 EMA25/50/100、MA5/10/30 多空排列，以及 EMA 穿越、MACD 金叉/死叉和临近预警。信号按各周期独立显示；技术提示不代表必然发生。</div>
 </section>
 <div class="filters" id="filters">
  <button class="filter active" data-filter="all">全部信号</button><button class="filter" data-filter="confirmed">已确认</button><button class="filter" data-filter="forming">形成中</button>
@@ -66,6 +66,10 @@ function addSignal(list,type,label,state,time,detail){list.push({type,label,stat
 function analyze(candles,series,index,prevIndex){const c=candles[index],p=candles[prevIndex];if(!c||!p)return [];
  const out=[],bullish=c.close>c.open,bearish=c.close<c.open;
  const emaValues=[25,50,100].map(n=>series.ema[n][index]);
+ if(emaValues.every(Number.isFinite)){
+  if(emaValues[0]>emaValues[1]&&emaValues[1]>emaValues[2])addSignal(out,'ema-stack-bull','EMA25/50/100 多头排列','confirmed',c.time,'EMA25 > EMA50 > EMA100');
+  if(emaValues[0]<emaValues[1]&&emaValues[1]<emaValues[2])addSignal(out,'ema-stack-bear','EMA25/50/100 空头排列','confirmed',c.time,'EMA25 < EMA50 < EMA100');
+ }
  if(bullish&&emaValues.every(v=>Number.isFinite(v)&&v>c.open&&v<c.close))
   addSignal(out,'ema-body-bull','EMA25/50/100 多头阳线共振','confirmed',c.time,'三条EMA同时位于阳线实体内');
  if(bearish&&emaValues.every(v=>Number.isFinite(v)&&v<c.open&&v>c.close))

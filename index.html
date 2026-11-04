@@ -84,6 +84,8 @@ function analyze(candles,series,index,prevIndex,activeIndicators=INDICATORS){con
    const prevEma=[series.ema.fast[prevIndex],series.ema.mid[prevIndex],series.ema.slow[prevIndex]];
    if(prevEma.every(Number.isFinite)&&p.close<prevEma[0]&&p.close<prevEma[1]&&p.close<prevEma[2]&&c.close>emaValues[0]&&c.close>emaValues[1]&&c.close>emaValues[2])
     addSignal(out,'ema-reclaim-bull','价格重新站上 EMA'+ep.fast+'/'+ep.mid+'/'+ep.slow,'confirmed',c.time,'前一根收盘价低于三条EMA，当前已收盘K线收盘价同时站上三条EMA');
+   if(prevEma.every(Number.isFinite)&&p.close>prevEma[0]&&p.close>prevEma[1]&&p.close>prevEma[2]&&c.close<emaValues[0]&&c.close<emaValues[1]&&c.close<emaValues[2])
+    addSignal(out,'ema-reclaim-bear','价格重新跌破 EMA'+ep.fast+'/'+ep.mid+'/'+ep.slow,'confirmed',c.time,'前一根收盘价高于三条EMA，当前已收盘K线收盘价同时跌破三条EMA');
   }
   if(emaValues[0]>emaValues[1]&&emaValues[1]>emaValues[2]&&!(series.ema.fast[prevIndex]>series.ema.mid[prevIndex]&&series.ema.mid[prevIndex]>series.ema.slow[prevIndex]))addSignal(out,'ema-stack-bull','EMA'+ep.fast+'/'+ep.mid+'/'+ep.slow+' 多头排列','confirmed',c.time,'刚刚形成EMA多头排列');
   if(emaValues[0]<emaValues[1]&&emaValues[1]<emaValues[2]&&!(series.ema.fast[prevIndex]<series.ema.mid[prevIndex]&&series.ema.mid[prevIndex]<series.ema.slow[prevIndex]))addSignal(out,'ema-stack-bear','EMA'+ep.fast+'/'+ep.mid+'/'+ep.slow+' 空头排列','confirmed',c.time,'刚刚形成EMA空头排列');
@@ -108,6 +110,8 @@ function analyze(candles,series,index,prevIndex,activeIndicators=INDICATORS){con
   // 只在已收盘K线上确认：前一根收盘价低于三条MA，当前收盘价同时高于三条MA。
   if(index===candles.length-2&&p.close<q5&&p.close<q10&&p.close<q30&&c.close>m5&&c.close>m10&&c.close>m30)
    addSignal(out,'ma-reclaim-bull','价格重新站上 MA'+mp.fast+'/'+mp.mid+'/'+mp.slow,'confirmed',c.time,'前一根收盘价低于三条MA，当前已收盘K线收盘价同时站上三条MA');
+  if(index===candles.length-2&&p.close>q5&&p.close>q10&&p.close>q30&&c.close<m5&&c.close<m10&&c.close<m30)
+   addSignal(out,'ma-reclaim-bear','价格重新跌破 MA'+mp.fast+'/'+mp.mid+'/'+mp.slow,'confirmed',c.time,'前一根收盘价高于三条MA，当前已收盘K线收盘价同时跌破三条MA');
   if(m5>m10&&m10>m30&&!(q5>q10&&q10>q30))addSignal(out,'ma-stack-bull','MA'+mp.fast+'/'+mp.mid+'/'+mp.slow+' 多头排列','confirmed',c.time,'刚刚形成MA多头排列');
   if(m5<m10&&m10<m30&&!(q5<q10&&q10<q30))addSignal(out,'ma-stack-bear','MA'+mp.fast+'/'+mp.mid+'/'+mp.slow+' 空头排列','confirmed',c.time,'刚刚形成MA空头排列');
   if(m5<=m10&&nearBelow(m5,m10,q5,q10,0.003)&&((m10-m5)/Math.max(Math.abs(m10),1e-12))<0.003)
@@ -124,6 +128,10 @@ function analyze(candles,series,index,prevIndex,activeIndicators=INDICATORS){con
    const state='MACD刚刚金叉';
    addSignal(out,'macd-bull-state',state,'confirmed',c.time,'最新一根已收盘K线的DIF刚刚上穿DEA');
   }
+  if(pd>=pe&&d<e){
+   const state='MACD刚刚死叉';
+   addSignal(out,'macd-bear-state',state,'confirmed',c.time,'最新一根已收盘K线的DIF刚刚下穿DEA');
+  }
  }
  if([d,e,pd,pe].every(Number.isFinite)){
   if(pd<=pe&&d>e)addSignal(out,'macd-cross-bull','MACD 金叉（多头）','confirmed',c.time,'DIF 上穿 DEA');
@@ -135,8 +143,11 @@ function analyze(candles,series,index,prevIndex,activeIndicators=INDICATORS){con
  }
  }
  // 只有同一交易对、同一周期、同一根最新已收盘K线同时满足EMA、MA和MACD三项条件，才显示扫描结果。
- const required=['ema-reclaim-bull','ma-reclaim-bull','macd-bull-state'];
- return required.every(type=>out.some(signal=>signal.type===type))?out.filter(signal=>required.includes(signal.type)):[];
+ const bullRequired=['ema-reclaim-bull','ma-reclaim-bull','macd-bull-state'];
+ const bearRequired=['ema-reclaim-bear','ma-reclaim-bear','macd-bear-state'];
+ if(bullRequired.every(type=>out.some(signal=>signal.type===type)))return out.filter(signal=>bullRequired.includes(signal.type));
+ if(bearRequired.every(type=>out.some(signal=>signal.type===type)))return out.filter(signal=>bearRequired.includes(signal.type));
+ return [];
 }
 async function refreshTop(){const [info,tickers]=await Promise.all([getJSON(BASE+'/fapi/v1/exchangeInfo'),getJSON(BASE+'/fapi/v1/ticker/24hr')]);const eligible=new Set(info.symbols.filter(s=>s.status==='TRADING'&&s.contractType==='PERPETUAL'&&s.quoteAsset==='USDT').map(s=>s.symbol));topSymbols=tickers.filter(t=>eligible.has(t.symbol)).sort((a,b)=>Number(b.quoteVolume)-Number(a.quoteVolume)).slice(0,100).map(t=>({symbol:t.symbol,quoteVolume:Number(t.quoteVolume),lastPrice:Number(t.lastPrice)}));lastTop=Date.now();}
 function renderHistory(){const count=history.length;$('historyBtn').textContent='查看信号历史 ('+count+')';$('historyCount').textContent=count+' 条记录';if(!count){$('historyList').innerHTML='<div class="empty">暂无历史信号，开始扫描后会自动记录。</div>';return;}const rows=history.slice(0,200);$('historyList').innerHTML=rows.map(h=>{const when=new Date(Number(h.time)).toLocaleString('zh-CN',{month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'});const state=h.state==='confirmed'?'已确认':'形成中预警';return '<div class="history-row"><div class="history-top"><span class="history-symbol">'+h.symbol+' · '+LABELS[h.interval]+'</span><span class="history-time">'+when+'</span></div><div class="history-meta">'+h.label+' · '+state+'</div></div>';}).join('');if(count>200)$('historyList').insertAdjacentHTML('beforeend','<div class="empty">仅显示最近 200 条；本机共保存 '+count+' 条。</div>');}
@@ -158,7 +169,7 @@ function getResonance(g){
  return chosen;
 }
 function render(){let view=results.filter(x=>filter==='all'||(filter==='confirmed'?x.confirmed:x.forming));$('resultCount').textContent=view.length+' 个周期信号';const groups=new Map();for(const r of view){if(!groups.has(r.symbol))groups.set(r.symbol,{symbol:r.symbol,price:r.price,quoteVolume:r.quoteVolume,signals:[]});groups.get(r.symbol).signals.push(r);}const arr=[...groups.values()].map(g=>({...g,resonance:getResonance(g)})).sort((a,b)=>b.resonance.tier-a.resonance.tier||b.resonance.indicators-a.resonance.indicators||b.resonance.periods-a.resonance.periods||b.resonance.latest-a.resonance.latest||a.symbol.localeCompare(b.symbol));if(!arr.length){$('results').innerHTML='<div class="empty full">目前没有符合条件的信号。扫描会持续更新；没有信号不代表行情不会变化。</div>';return;}
- $('results').innerHTML=arr.map(g=>{const required=['ema-reclaim-bull','ma-reclaim-bull','macd-bull-state'];const tags=g.signals.map(s=>{const items=required.map(type=>s.signals.find(z=>z.type===type));if(items.some(z=>!z))return '';return items.map(z=>'<span class="tag '+(z.state==='confirmed'?'confirm':'pending')+'">'+LABELS[s.interval]+' '+z.label+'</span>').join('');}).join('');const r=g.resonance;const resonanceTags='<span class="tag count">时间'+(r.periods>=2?'共振 ':' ')+r.periods+'周期</span><span class="tag count">指标'+(r.indicators>=2?'共振 ':' ')+r.indicators+'项</span>';const tierLabel=r.tier===3?'双重共振较强':r.tier===2?'指标共振较强':r.tier===1?'时间共振较强':'共振较弱';return '<article class="item"><div class="itemtop"><div><div class="symbol">'+g.symbol+'</div><div class="detail">'+tierLabel+'</div></div><div class="price">'+fmt(g.price)+'<br>24h成交额 '+fmt(g.quoteVolume)+'</div></div><div class="tags">'+resonanceTags+'</div><div class="tags">'+tags+'</div></article>';}).join('');}
+ $('results').innerHTML=arr.map(g=>{const bullRequired=['ema-reclaim-bull','ma-reclaim-bull','macd-bull-state'],bearRequired=['ema-reclaim-bear','ma-reclaim-bear','macd-bear-state'];const tags=g.signals.map(s=>{const bearish=s.signals.some(z=>bearRequired.includes(z.type));const required=bearish?bearRequired:bullRequired;const items=required.map(type=>s.signals.find(z=>z.type===type));if(items.some(z=>!z))return '';return items.map(z=>'<span class="tag '+(z.state==='confirmed'?'confirm':'pending')+'">'+LABELS[s.interval]+' '+z.label+'</span>').join('');}).join('');const r=g.resonance;const resonanceTags='<span class="tag count">时间'+(r.periods>=2?'共振 ':' ')+r.periods+'周期</span><span class="tag count">指标'+(r.indicators>=2?'共振 ':' ')+r.indicators+'项</span>';const tierLabel=r.tier===3?'双重共振较强':r.tier===2?'指标共振较强':r.tier===1?'时间共振较强':'共振较弱';return '<article class="item"><div class="itemtop"><div><div class="symbol">'+g.symbol+'</div><div class="detail">'+tierLabel+'</div></div><div class="price">'+fmt(g.price)+'<br>24h成交额 '+fmt(g.quoteVolume)+'</div></div><div class="tags">'+resonanceTags+'</div><div class="tags">'+tags+'</div></article>';}).join('');}
 function loadSettingsInputs(){['emaFast','emaMid','emaSlow','maFast','maMid','maSlow','macdFast','macdSlow','macdSignal'].forEach(id=>{const group=id.startsWith('macd')?'macd':id.startsWith('ema')?'ema':'ma';const key=id.replace(/^(macd|ema|ma)/,'').toLowerCase();$(id).value=indicatorSettings[group][key];});}
 function saveIndicatorSettings(){const next={ema:{fast:Number($('emaFast').value),mid:Number($('emaMid').value),slow:Number($('emaSlow').value)},ma:{fast:Number($('maFast').value),mid:Number($('maMid').value),slow:Number($('maSlow').value)},macd:{fast:Number($('macdFast').value),slow:Number($('macdSlow').value),signal:Number($('macdSignal').value)}};const nums=[...Object.values(next.ema),...Object.values(next.ma),...Object.values(next.macd)];if(nums.some(n=>!Number.isInteger(n)||n<1)||nums.some(n=>n>150)||next.macd.signal>40||next.ema.fast>=next.ema.mid||next.ema.mid>=next.ema.slow||next.ma.fast>=next.ma.mid||next.ma.mid>=next.ma.slow||next.macd.fast>=next.macd.slow){$('settingsStatus').textContent='参数无效：请填写正整数；EMA/MA 必须从快到慢递增，MACD 快线必须小于慢线。';return;}indicatorSettings=next;try{localStorage.setItem('emaRadarIndicatorSettings',JSON.stringify(indicatorSettings));$('settingsStatus').textContent='参数已保存：EMA '+next.ema.fast+'/'+next.ema.mid+'/'+next.ema.slow+' · MA '+next.ma.fast+'/'+next.ma.mid+'/'+next.ma.slow+' · MACD '+next.macd.fast+'/'+next.macd.slow+'/'+next.macd.signal+'。下次扫描生效。';}catch(e){$('settingsStatus').textContent='当前参数已应用，但浏览器不允许保存到本机。';}}
 $('saveSettingsBtn').addEventListener('click',saveIndicatorSettings);

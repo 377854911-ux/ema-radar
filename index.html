@@ -132,7 +132,8 @@ function analyze(candles,series,index,prevIndex,activeIndicators=INDICATORS){con
    addSignal(out,'macd-near-bear','MACD 即将死叉（空头预警）','forming',c.time,'DIF 与 DEA 靠拢，关注向下突破');
  }
  }
- return out;
+ // 扫描结果只保留同时满足 EMA 三线重新站上、MACD 条件及最新已收盘K线确认的组合信号。
+ return out.filter(signal=>signal.type==='ema-reclaim-bull');
 }
 async function refreshTop(){const [info,tickers]=await Promise.all([getJSON(BASE+'/fapi/v1/exchangeInfo'),getJSON(BASE+'/fapi/v1/ticker/24hr')]);const eligible=new Set(info.symbols.filter(s=>s.status==='TRADING'&&s.contractType==='PERPETUAL'&&s.quoteAsset==='USDT').map(s=>s.symbol));topSymbols=tickers.filter(t=>eligible.has(t.symbol)).sort((a,b)=>Number(b.quoteVolume)-Number(a.quoteVolume)).slice(0,100).map(t=>({symbol:t.symbol,quoteVolume:Number(t.quoteVolume),lastPrice:Number(t.lastPrice)}));lastTop=Date.now();}
 function renderHistory(){const count=history.length;$('historyBtn').textContent='查看信号历史 ('+count+')';$('historyCount').textContent=count+' 条记录';if(!count){$('historyList').innerHTML='<div class="empty">暂无历史信号，开始扫描后会自动记录。</div>';return;}const rows=history.slice(0,200);$('historyList').innerHTML=rows.map(h=>{const when=new Date(Number(h.time)).toLocaleString('zh-CN',{month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'});const state=h.state==='confirmed'?'已确认':'形成中预警';return '<div class="history-row"><div class="history-top"><span class="history-symbol">'+h.symbol+' · '+LABELS[h.interval]+'</span><span class="history-time">'+when+'</span></div><div class="history-meta">'+h.label+' · '+state+'</div></div>';}).join('');if(count>200)$('historyList').insertAdjacentHTML('beforeend','<div class="empty">仅显示最近 200 条；本机共保存 '+count+' 条。</div>');}

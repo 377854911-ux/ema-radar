@@ -119,10 +119,10 @@ function analyze(candles,series,index,prevIndex,activeIndicators=INDICATORS){con
  if(activeIndicators.includes('macd')){
  const d=series.macd.dif[index],e=series.macd.dea[index],pd=series.macd.dif[prevIndex],pe=series.macd.dea[prevIndex];
  if(index===candles.length-2&&[d,e,pd,pe].every(Number.isFinite)){
-  const nearGolden=d<=e&&Math.abs(d-e)/Math.max(Math.abs(c.close),1e-12)<0.0015&&Math.abs(d-e)<Math.abs(pd-pe);
-  if(d>e||nearGolden){
-   const state=d>e?(pd<=pe?'MACD已金叉':'MACD金叉后多头延续'):'MACD即将金叉';
-   addSignal(out,'macd-bull-state',state,'confirmed',c.time,'最新一根已收盘K线的DIF与DEA关系：'+state);
+  // 只接受最新已收盘K线刚刚发生的MACD金叉；已经处于DIF>DEA的旧多头状态不再算新信号。
+  if(pd<=pe&&d>e){
+   const state='MACD刚刚金叉';
+   addSignal(out,'macd-bull-state',state,'confirmed',c.time,'最新一根已收盘K线的DIF刚刚上穿DEA');
   }
  }
  if([d,e,pd,pe].every(Number.isFinite)){

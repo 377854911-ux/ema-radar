@@ -30,7 +30,7 @@
  <div class="actions" style="margin-top:14px"><button class="btn" id="scan">手动立即扫描</button><button class="btn" id="stop" disabled>停止本轮扫描</button></div><div class="label">自动扫描设置</div><div class="actions" style="align-items:center"><label class="muted"><input id="autoEnabled" type="checkbox"> 开启自动扫描</label><label class="muted">间隔（分钟） <input id="autoMinutes" type="number" min="1" max="1440" step="1" value="5" style="width:75px;padding:8px;background:#0b1422;color:#edf3fb;border:1px solid #26364d;border-radius:8px"></label><button class="btn" id="saveAuto">保存间隔</button><button class="btn" id="stopAuto" disabled>停止自动扫描</button></div><div class="status" id="autoStatus">自动扫描默认关闭；手动扫描可随时单独使用。</div><div class="status" id="status">请选择周期后开始。未收盘K线会参与预警，信号可能随价格变化而消失。</div>
 </section>
 <div class="label">扫描结果 <span class="muted" id="resultMeta"></span></div><section id="results"><div class="empty">等待扫描</div></section>
-<div class="warning">严格判定：前一根K线三线为快线≤中线≤慢线，本根K线三线同时翻转为快线＞中线＞慢线；并且三条均线数值都严格位于同一根上涨阳线的开盘价与当前价之间。当前未收盘K线可触发形成中预警；收盘后仍满足才视为收盘确认。数据来自币安公开行情，不连接钱包、不下单。为控制请求频率，扫描按所选周期逐项执行；页面在手机后台可能暂停。</div>
+<div class="warning">严格判定：前一根K线三线为快线≤中线≤慢线，本根K线三线同时翻转为快线＞中线＞慢线；并且三条均线数值都严格位于同一根上涨阳线的开盘价与当前价之间。<b>信号有效期：只接受当前K线或上一根K线形成的信号；超过1根K线（例如10几根K线前）的旧信号直接过滤，不进入结果。</b>当前未收盘K线可触发形成中预警；收盘后仍满足才视为收盘确认。结果按信号形成时间从新到旧排列，成交额不参与排序。数据来自币安公开行情，不连接钱包、不下单。并发扫描最多12个任务；页面在手机后台可能暂停。</div>
 </main>
 <script>
 const API='https://fapi.binance.com';

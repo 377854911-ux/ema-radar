@@ -81,7 +81,7 @@ function analyze(candles,series,index,prevIndex,activeIndicators=INDICATORS){con
  if(emaValues.every(Number.isFinite)){
   // EMA重新站上信号：只检查最新已收盘K线，并要求前一根收盘价低于三条EMA、当前收盘价高于三条EMA。
   // 同时要求MACD处于即将金叉、刚刚金叉或金叉后的多头状态。
-  if(index===candles.length-2){
+  if(index>=candles.length-2){
    const prevEma=[series.ema.fast[prevIndex],series.ema.mid[prevIndex],series.ema.slow[prevIndex]];
    if(prevEma.every(Number.isFinite)&&p.close<prevEma[0]&&p.close<prevEma[1]&&p.close<prevEma[2]&&c.close>emaValues[0]&&c.close>emaValues[1]&&c.close>emaValues[2])
     addSignal(out,'ema-reclaim-bull','价格重新站上 EMA'+ep.fast+'/'+ep.mid+'/'+ep.slow,'confirmed',c.time,'前一根收盘价低于三条EMA，当前已收盘K线收盘价同时站上三条EMA');
@@ -109,9 +109,9 @@ function analyze(candles,series,index,prevIndex,activeIndicators=INDICATORS){con
  const mp=indicatorSettings.ma,m5=series.ma.fast[index],m10=series.ma.mid[index],m30=series.ma.slow[index],q5=series.ma.fast[prevIndex],q10=series.ma.mid[prevIndex],q30=series.ma.slow[prevIndex];
  if([m5,m10,m30,q5,q10,q30].every(Number.isFinite)){
   // 只在已收盘K线上确认：前一根收盘价低于三条MA，当前收盘价同时高于三条MA。
-  if(index===candles.length-2&&p.close<q5&&p.close<q10&&p.close<q30&&c.close>m5&&c.close>m10&&c.close>m30)
+  if(index>=candles.length-2&&p.close<q5&&p.close<q10&&p.close<q30&&c.close>m5&&c.close>m10&&c.close>m30)
    addSignal(out,'ma-reclaim-bull','价格重新站上 MA'+mp.fast+'/'+mp.mid+'/'+mp.slow,'confirmed',c.time,'前一根收盘价低于三条MA，当前已收盘K线收盘价同时站上三条MA');
-  if(index===candles.length-2&&p.close>q5&&p.close>q10&&p.close>q30&&c.close<m5&&c.close<m10&&c.close<m30)
+  if(index>=candles.length-2&&p.close>q5&&p.close>q10&&p.close>q30&&c.close<m5&&c.close<m10&&c.close<m30)
    addSignal(out,'ma-reclaim-bear','价格重新跌破 MA'+mp.fast+'/'+mp.mid+'/'+mp.slow,'confirmed',c.time,'前一根收盘价高于三条MA，当前已收盘K线收盘价同时跌破三条MA');
   if(m5>m10&&m10>m30&&!(q5>q10&&q10>q30))addSignal(out,'ma-stack-bull','MA'+mp.fast+'/'+mp.mid+'/'+mp.slow+' 多头排列','confirmed',c.time,'刚刚形成MA多头排列');
   if(m5<m10&&m10<m30&&!(q5<q10&&q10<q30))addSignal(out,'ma-stack-bear','MA'+mp.fast+'/'+mp.mid+'/'+mp.slow+' 空头排列','confirmed',c.time,'刚刚形成MA空头排列');
@@ -123,7 +123,7 @@ function analyze(candles,series,index,prevIndex,activeIndicators=INDICATORS){con
  }
  if(activeIndicators.includes('macd')){
  const d=series.macd.dif[index],e=series.macd.dea[index],pd=series.macd.dif[prevIndex],pe=series.macd.dea[prevIndex];
- if(index===candles.length-2&&[d,e,pd,pe].every(Number.isFinite)){
+ if(index>=candles.length-2&&[d,e,pd,pe].every(Number.isFinite)){
   // 只接受最新已收盘K线刚刚发生的MACD金叉；已经处于DIF>DEA的旧多头状态不再算新信号。
   if(pd<=pe&&d>e){
    const state='MACD刚刚金叉';

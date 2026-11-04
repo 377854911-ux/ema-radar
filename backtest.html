@@ -30,7 +30,7 @@ main{max-width:960px;margin:auto}.top{padding:20px 2px 14px}.back{display:inline
  <div class="label" style="margin-top:14px">选择回测模型（可多选）</div>
  <div class="models"><label><input type="checkbox" value="big" checked> <b class="model-big">大模型</b></label><label><input type="checkbox" value="ema" checked> <b class="model-ema">EMA模型</b></label><label><input type="checkbox" value="ma" checked> <b class="model-ma">MA模型</b></label></div>
  <div class="field"><label for="universe">回测交易对范围</label><select id="universe"><option value="100" selected>当前成交额前100 USDT永续</option><option value="50">当前成交额前50</option><option value="20">当前成交额前20</option></select></div>
- <div class="actions"><button class="btn" id="start">开始历史回溯</button><button class="btn secondary" id="stop" disabled>停止</button><button class="btn secondary" id="export" disabled>导出CSV</button></div>
+ <div class="actions"><button class="btn" id="start" onclick="document.getElementById('status').textContent='按钮已触发，正在启动回测…';try{if(typeof run==='function'){var p=run();if(p&&p.catch)p.catch(function(e){document.getElementById('status').textContent='回测启动失败：'+(e.message||e);});}else{document.getElementById('status').textContent='按钮已触发，但回测脚本没有加载成功。请截图反馈。';}}catch(e){document.getElementById('status').textContent='回测启动失败：'+(e.message||e);}">开始历史回溯</button><button class="btn secondary" id="stop" disabled>停止</button><button class="btn secondary" id="export" disabled>导出CSV</button></div>
  <div class="bar"><i id="progress"></i></div><div class="status" id="status">默认：最近90天、1小时、前100个交易对、信号后3根K线评估；初始本金1000 USDT，每笔按当前权益的10%投入。可在设置中调整。</div>
  <div class="note">说明：为了避免未来数据泄漏，信号只在K线收盘后确认；进场价使用信号K线之后一根K线的开盘价；如先触发止盈或止损则提前退出，否则在所选持仓周期结束时按收盘价退出。止损固定为信号前一根已收盘K线低点（多头）/高点（空头）；止盈策略分别独立回测。若同一根K线同时触及止盈止损，将调用1分钟K线还原先后；仍无法判断则标记“顺序不明”，不计入胜率和收益。手续费双向收取；资金费率按历史实际记录或手动每8小时模拟。仓位按每笔进场时权益比例作为名义仓位估算；多笔交易按平仓时间顺序模拟，不锁定重叠持仓占用的保证金，因此资金曲线属于简化估算。交易对名单按回测开始时的当前成交额排名，并非历史每一天的前100，因此存在幸存者偏差。不同周期请分别运行。15分钟×365天×100个交易对会产生大量请求，建议先用30/90天验证。</div>
 </section>
@@ -58,7 +58,8 @@ const API='https://fapi.binance.com', $=id=>document.getElementById(id);
 const DEFAULT={ema:{fast:25,mid:50,slow:100},ma:{fast:5,mid:10,slow:30},macd:{fast:12,slow:26,signal:9}};
 let settings=load('emaRadarIndicatorSettings',DEFAULT),simple=load('simpleRadarIndicatorParams',{ema:[25,50,100],ma:[5,10,30]});
 let stopRequested=false,running=false,rows=[],taskDone=0,taskTotal=0;
-function cloneDefault(d){try{if(typeof structuredClone==='function')return structuredClone(d);}catch(e){}return JSON.parse(JSON.stringify(d));}\nfunction load(k,d){try{return Object.assign(cloneDefault(d),JSON.parse(localStorage.getItem(k)||'{}'));}catch(e){return cloneDefault(d);}}
+function cloneDefault(d){try{if(typeof structuredClone==='function')return structuredClone(d);}catch(e){}return JSON.parse(JSON.stringify(d));}
+function load(k,d){try{return Object.assign(cloneDefault(d),JSON.parse(localStorage.getItem(k)||'{}'));}catch(e){return cloneDefault(d);}}
 function getSimple(){try{const x=JSON.parse(localStorage.getItem('simpleRadarIndicatorParams')||'null');return {ema:Array.isArray(x?.ema)&&x.ema.length===3?x.ema:[25,50,100],ma:Array.isArray(x?.ma)&&x.ma.length===3?x.ma:[5,10,30]};}catch(e){return {ema:[25,50,100],ma:[5,10,30]};}}
 const activeRequests=new Set();async function get(url){let last;for(let attempt=0;attempt<3;attempt++){if(stopRequested)throw Error('已停止');const controller=new AbortController();activeRequests.add(controller);const timer=setTimeout(()=>controller.abort(),18000);try{const r=await fetch(url,{cache:'no-store',signal:controller.signal});if(!r.ok){const err=Error('行情请求失败 HTTP '+r.status);err.status=r.status;if(r.status===418||r.status===429||r.status>=500){last=err;const retry=Number(r.headers.get('Retry-After'));await sleep(Math.max(800*(attempt+1),Number.isFinite(retry)&&retry>0?retry*1000:0));continue;}throw err;}return await r.json();}catch(e){last=e;if(stopRequested)throw Error('已停止');if(e.status&&e.status!==418&&e.status!==429&&e.status<500)throw e;if(attempt<2)await sleep(700*(attempt+1));}finally{clearTimeout(timer);activeRequests.delete(controller);}}throw last||Error('行情请求连续失败');}
 const sleep=ms=>new Promise(r=>setTimeout(r,ms));
@@ -116,11 +117,7 @@ function exportCSV(){const head=['symbol','model','take_profit_strategy','direct
 try{
  const startButton=$('start'),stopButton=$('stop'),exportButton=$('export');
  if(!startButton||!stopButton||!exportButton)throw new Error('页面按钮元素缺失，请刷新页面');
- startButton.addEventListener('click',function(){
-  $('status').textContent='正在启动历史回溯，请稍候…';
-  try{const task=run();Promise.resolve(task).catch(function(e){$('status').textContent='回测启动失败：'+(e&&e.message?e.message:String(e));startButton.disabled=false;});}
-  catch(e){$('status').textContent='回测启动失败：'+(e&&e.message?e.message:String(e));startButton.disabled=false;}
- });
+ // 点击事件由按钮自身内联回调触发，确保即时反馈。
  stopButton.addEventListener('click',()=>{stopRequested=true;for(const c of activeRequests)c.abort();$('status').textContent='正在停止并取消网络请求…';});
  exportButton.addEventListener('click',exportCSV);
  $('status').textContent='页面脚本已就绪，请选择模型后点击“开始历史回溯”。';

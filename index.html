@@ -48,7 +48,7 @@ main{max-width:920px;margin:0 auto}.top{padding:20px 2px 14px}.eyebrow{color:var
 <div class="results" id="results"><div class="empty full">点击“开始扫描”读取币安公开行情。</div></div>
 <section class="panel" id="historyPanel" hidden><div class="sectionhead"><h2>信号历史</h2><small id="historyCount">0 条记录</small></div><div id="historyList"><div class="empty">暂无历史信号，开始扫描后会自动记录。</div></div></section>
 <div class="foot">
- 数据来源：Binance USDⓈ-M Futures 公共 REST API。扫描只读取行情，不连接钱包、不读取账户、不下单。首次扫描需要请求最多约 700 组K线数据，可能需要一些时间；自动扫描间隔可在页面中设置（默认 30 分钟）；较短间隔会增加行情请求频率。<br>
+ 数据来源：Binance USDⓈ-M Futures 公共 REST API。扫描只读取行情，不连接钱包、不读取账户、不下单。首次扫描最多读取约 900 组K线数据，每组最多500根K线，可能需要一些时间；自动扫描间隔可在页面中设置（默认 30 分钟）；较短间隔会增加行情请求频率。<br>
  注意：本页面需要通过 HTTPS 网站打开，直接在 iPhone“文件”中预览 HTML 时，浏览器可能限制跨域行情请求。页面切到后台或锁屏后，iOS 也可能暂停刷新。
 </div>
 </main>
@@ -70,10 +70,10 @@ function openCandleDB(){if(candleDbPromise)return candleDbPromise;candleDbPromis
 async function readCandleCache(key){if(candleMemory.has(key))return candleMemory.get(key);const db=await openCandleDB();if(!db)return null;return new Promise(resolve=>{try{const q=db.transaction('klines','readonly').objectStore('klines').get(key);q.onsuccess=()=>{const v=q.result?.candles||null;if(v){v._savedAt=q.result.savedAt||0;candleMemory.set(key,v);}resolve(v);};q.onerror=()=>resolve(null);}catch(e){resolve(null);}});}
 async function writeCandleCache(key,candles){candleMemory.set(key,candles);const db=await openCandleDB();if(!db)return;try{await new Promise(resolve=>{const tx=db.transaction('klines','readwrite');tx.objectStore('klines').put({key,candles,savedAt:Date.now()});tx.oncomplete=tx.onerror=tx.onabort=()=>resolve();});}catch(e){}}
 async function getCachedCandles(symbol,interval){const key=symbol+'|'+interval;let cached=await readCandleCache(key);const freshMs=interval==='1d'?60000:15000;if(cached?.length&&Date.now()-(cached._savedAt||0)<freshMs)return cached;
- let url=BASE+'/fapi/v1/klines?symbol='+symbol+'&interval='+interval+'&limit=200';
- if(cached?.length){url=BASE+'/fapi/v1/klines?symbol='+symbol+'&interval='+interval+'&startTime='+cached[cached.length-1].time+'&limit=200';}
+ let url=BASE+'/fapi/v1/klines?symbol='+symbol+'&interval='+interval+'&limit=500';
+ if(cached?.length){url=BASE+'/fapi/v1/klines?symbol='+symbol+'&interval='+interval+'&startTime='+cached[cached.length-1].time+'&limit=500';}
  const rows=await getJSON(url);const incoming=rows.map(k=>({time:k[0],open:+k[1],high:+k[2],low:+k[3],close:+k[4],closeTime:k[6]}));
- let merged;if(cached?.length){const byTime=new Map(cached.map(c=>[c.time,c]));for(const c of incoming)byTime.set(c.time,c);merged=[...byTime.values()].sort((a,b)=>a.time-b.time).slice(-200);}else merged=incoming.slice(-200);
+ let merged;if(cached?.length){const byTime=new Map(cached.map(c=>[c.time,c]));for(const c of incoming)byTime.set(c.time,c);merged=[...byTime.values()].sort((a,b)=>a.time-b.time).slice(-500);}else merged=incoming.slice(-200);
  merged._savedAt=Date.now();await writeCandleCache(key,merged);return merged;
 }
 async function pool(items,limit,worker){let next=0;const runners=Array.from({length:limit},async()=>{while(true){const i=next++;if(i>=items.length)break;await worker(items[i],i);}});await Promise.all(runners);}

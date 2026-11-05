@@ -12,7 +12,7 @@
 </div></section>
 <section class="panel"><div class="heading">提醒铃声</div><div class="muted">EMA 多头或空头出现新信号时提醒。提醒总开关也可在主页面控制。</div><div class="grid" style="grid-template-columns:1fr"><label>铃声样式<select id="soundTone"><option value="double">清脆双音（默认）</option><option value="short">短促提示音</option><option value="long">长音提醒</option></select></label></div><div class="actions"><button class="btn secondary" id="previewSound">试听铃声</button><button class="btn secondary" id="soundToggle">开启提醒</button></div><div class="status" id="soundStatus"></div></section>
 <section class="panel"><div class="heading">自动扫描间隔</div><div class="muted">每轮扫描完成后，等待所设时间再开始下一轮。</div><div class="grid" style="grid-template-columns:1fr"><label>扫描间隔（分钟）<input id="autoMinutes" type="number" min="1" max="1440" step="1" value="30"></label></div>
-<div class="actions"><button class="btn" id="save">保存所有设置</button><button class="btn secondary" id="reset">恢复默认参数</button><a class="btn secondary" href="./index.html">返回扫描页面</a></div><div class="status" id="status"></div><div class="note">已移除大模型和 MA 模型。主页面与回测页面只使用 EMA 模型。</div>
+<div class="actions"><button class="btn" id="save">保存所有设置</button><button class="btn secondary" id="reset">恢复默认参数</button><a class="btn secondary" href="./index.html">返回扫描页面</a></div><div class="status" id="status"></div><div class="note">主页面与回测页面都只使用 EMA 模型。</div>
 </section></main>
 <script>
 const $=id=>document.getElementById(id),DEFAULT_EMA=[25,50,100],PERIODS=['15m','30m','1h','2h','4h','6h','8h','12h','1d'];

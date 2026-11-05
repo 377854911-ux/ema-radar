@@ -43,7 +43,7 @@ main{max-width:960px;margin:auto}.top{padding:20px 2px 14px}.back{display:inline
  </div>
 </section>
 <div class="section"><h2>EMA模型表现</h2><span class="muted">多空分开统计</span></div><section class="panel tablewrap"><table class="table"><thead><tr><th>模型 / 方向</th><th>止盈策略</th><th>信号数</th><th>胜率</th><th>平均净收益</th><th>累计净收益</th><th>平均盈亏比</th><th>最大有利波动</th><th>最大不利波动</th><th>最大连续亏损笔数</th><th>净利润（USDT）</th><th>期末权益（USDT）</th></tr></thead><tbody id="modelRows"><tr><td colspan="11" class="empty">等待回测数据</td></tr></tbody></table></section>
-<div class="section"><h2>历史信号明细</h2><span class="muted" id="detailCount">0 条</span></div><section class="panel tablewrap"><table class="table"><thead><tr><th>交易对</th><th>模型</th><th>止盈策略</th><th>方向</th><th>信号时间</th><th>入场价</th><th>出场价</th><th>净收益 / 出场原因</th><th>仓位（USDT）</th><th>盈亏（USDT）</th><th>最大有利</th><th>最大不利</th></tr></thead><tbody id="details"><tr><td colspan="12" class="empty">回测完成后显示</td></tr></tbody></table></section>
+<div class="section"><h2>历史信号与成交明细</h2><span class="muted" id="detailCount">0 条</span></div><section class="panel tablewrap"><table class="table"><thead><tr><th>交易对</th><th>模型</th><th>止盈策略</th><th>方向</th><th>信号时间</th><th>入场价</th><th>出场价</th><th>净收益 / 出场原因</th><th>仓位（USDT）</th><th>盈亏（USDT）</th><th>最大有利</th><th>最大不利</th></tr></thead><tbody id="details"><tr><td colspan="12" class="empty">回测完成后显示</td></tr></tbody></table></section>
 </main>
 <script>
 (function(){
@@ -76,7 +76,53 @@ async function fetchOneMinute(symbol,candle,cache){const key=symbol+'|'+candle.t
 async function resolveIntrabar(symbol,candle,entry,stop,target,direction,cache){try{const mins=await fetchOneMinute(symbol,candle,cache);if(!mins.length)return {kind:'unknown'};for(const m of mins){const sh=direction==='bull'?m.low<=stop:m.high>=stop,th=target!=null&&(direction==='bull'?m.high>=target:m.low<=target);if(sh&&th)return {kind:'unknown'};if(sh)return {kind:'stop',price:(direction==='bull'&&m.open<stop)||(direction==='bear'&&m.open>stop)?m.open:stop,time:m.time};if(th)return {kind:'target',price:(direction==='bull'&&m.open>target)||(direction==='bear'&&m.open<target)?m.open:target,time:m.time};}return {kind:'unknown'};}catch(e){return {kind:'unknown'};}}
 function getTarget(strategy,entry,risk,direction,series,j,opts){const sign=direction==='bull'?1:-1;if(strategy==='rr')return entry+sign*risk*opts.rr;if(strategy==='pct')return entry*(1+sign*opts.tpPct/100);if(strategy==='ema')return series.simpleEma[{fast:0,mid:1,slow:2}[opts.tpLine]][j];return null;}
 function fundingCost(direction,entryTime,exitTime,funding,mode,manualRate){const sign=direction==='bull'?1:-1;if(mode==='manual'){let count=0;for(let t=Math.ceil(entryTime/28800000)*28800000;t<=exitTime;t+=28800000)if(t>entryTime)count++;return count*manualRate*sign;}return funding.filter(x=>x.time>entryTime&&x.time<=exitTime).reduce((s,x)=>s+x.rate*100*sign,0);}
-async function evaluateTrade(symbol,model,direction,strategy,candles,i,horizon,fee,series,funding,opts,minuteCache){const sig=candles[i],next=candles[i+1];if(!sig||!next)return null;const begin=sig.closeTime+1,expires=begin+opts.intervalMs/2,limit=direction==='bull'?sig.close-Math.abs(sig.close-sig.open)*.2:sig.close+Math.abs(sig.close-sig.open)*.2;let entry=null,entryTime=0;for(const m of await fetchOneMinute(symbol,next,minuteCache)){if(m.time+60000>expires)break;if(m.closeTime<begin)continue;if(direction==='bull'?m.low<=limit:m.high>=limit){entry=direction==='bull'?(m.open<limit?m.open:limit):(m.open>limit?m.open:limit);entryTime=m.time;break;}}if(entry==null)return {symbol,model,direction,strategy,time:sig.time,net:null,status:'expired',exitReason:'挂单到期未成交',limitPrice:limit,expiresAt:expires};const choices=[];if(opts.stopSources.includes('extreme'))choices.push(direction==='bull'?sig.low:sig.high);if(opts.stopSources.includes('open'))choices.push(sig.open);if(opts.stopSources.includes('hard'))choices.push(direction==='bull'?entry*(1-opts.hardStopPct/100):entry*(1+opts.hardStopPct/100));const valid=choices.filter(x=>Number.isFinite(x)&&x>0&&(direction==='bull'?x<entry:x>entry));if(!valid.length)return {symbol,model,direction,strategy,time:sig.time,entry,entryTime,net:null,status:'invalid-stop',reason:'所选止损参考均无效',limitPrice:limit,expiresAt:expires};const stop=direction==='bull'?Math.max(...valid):Math.min(...valid),risk=Math.abs(entry-stop),sign=direction==='bull'?1:-1,last=Math.min(candles.length-1,i+horizon),firstTarget=getTarget(strategy,entry,risk,direction,series,i+1,opts),firstStopHit=direction==='bull'?next.low<=stop:next.high>=stop,firstTargetHit=firstTarget!=null&&Number.isFinite(firstTarget)&&(direction==='bull'?next.high>=firstTarget:next.low<=firstTarget);if(firstStopHit||firstTargetHit)return {symbol,model,direction,strategy,time:sig.time,entry,entryTime,net:null,status:'ambiguous',exitReason:'进场所在K线也触及止盈或止损，无法确定进场后的先后',stop,limitPrice:limit,expiresAt:expires};let exit=NaN,exitTime=0,reason='持仓周期到期',fav=0,adv=0,extreme=entry,trail=null,status='closed';for(let j=i+2;j<=last;j++){const bar=candles[j];if(bar.closeTime<entryTime)continue;const target=getTarget(strategy,entry,risk,direction,series,j,opts),sh=direction==='bull'?bar.low<=stop:bar.high>=stop;let th=false,mx=false;if(strategy==='macd'){const d=series.macd.dif,e=series.macd.dea;mx=Number.isFinite(d[j])&&Number.isFinite(e[j])&&Number.isFinite(d[j-1])&&Number.isFinite(e[j-1])&&(direction==='bull'?d[j-1]>=e[j-1]&&d[j]<e[j]:d[j-1]<=e[j-1]&&d[j]>e[j]);}if(strategy==='trail'){if(direction==='bull'){extreme=Math.max(extreme,bar.high);if((extreme/entry-1)*100>=opts.trailActivate)trail=extreme*(1-opts.trailGap/100);th=trail!=null&&bar.low<=trail;}else{extreme=Math.min(extreme,bar.low);if((entry/extreme-1)*100>=opts.trailActivate)trail=extreme*(1+opts.trailGap/100);th=trail!=null&&bar.high>=trail;}}else if(target!=null&&Number.isFinite(target))th=direction==='bull'?bar.high>=target:bar.low<=target;if(sh&&th){const r=await resolveIntrabar(symbol,bar,entry,stop,strategy==='trail'?trail:target,direction,minuteCache);if(r.kind==='unknown'){status='ambiguous';exitTime=bar.closeTime;reason='同一K线止盈止损先后不明';break;}exit=r.price;exitTime=r.time;reason=r.kind==='stop'?'止损':'止盈';break;}if(sh){exit=(direction==='bull'&&bar.open<stop)||(direction==='bear'&&bar.open>stop)?bar.open:stop;exitTime=bar.time;reason='止损';break;}if(th){const level=strategy==='trail'?trail:target;exit=(direction==='bull'&&bar.open>level)||(direction==='bear'&&bar.open<level)?bar.open:level;exitTime=bar.time;reason='止盈';break;}if(mx){exit=bar.close;exitTime=bar.closeTime;reason='MACD反向信号';break;}if(j===last){exit=bar.close;exitTime=bar.closeTime;reason=strategy==='time'?'持仓周期止盈':'评估周期到期';}}if(status==='ambiguous')return {symbol,model,direction,strategy,time:sig.time,entry,entryTime,net:null,status,exitReason:reason,stop,limitPrice:limit,expiresAt:expires};if(!Number.isFinite(exit))return null;for(let j=i+1;j<=last&&candles[j].time<=exitTime;j++){const q=candles[j];if(q.closeTime<entryTime)continue;fav=Math.max(fav,direction==='bull'?(q.high/entry-1)*100:(entry/q.low-1)*100);adv=Math.min(adv,direction==='bull'?(q.low/entry-1)*100:(entry/q.high-1)*100);}if(reason==='止损')exit=direction==='bull'?exit*(1-opts.stopSlippage/100):exit*(1+opts.stopSlippage/100);const gross=(exit/entry-1)*sign*100,fees=fee*(1+exit/entry),fund=fundingCost(direction,entryTime,exitTime,funding,opts.fundingMode,opts.manualFunding);return {symbol,model,direction,strategy,time:sig.time,entryTime,entry,exit,exitTime,net:gross-fees-fund,gross,fees,fundingCost:fund,favorable:fav,adverse:adv,status,exitReason:reason,stop,limitPrice:limit,expiresAt:expires,stopSlippageApplied:reason==='止损'?opts.stopSlippage:0};}
+async function evaluateTrade(symbol,model,direction,strategy,candles,i,horizon,fee,series,funding,opts,minuteCache){
+ const sig=candles[i],entryBar=candles[i+1];
+ if(!sig||!entryBar)return null;
+ // Signal is confirmed at the prior candle close; entry is the very next candle open.
+ const entry=entryBar.open,entryTime=entryBar.time;
+ const choices=[];
+ if(opts.stopSources.includes('extreme'))choices.push(direction==='bull'?sig.low:sig.high);
+ if(opts.stopSources.includes('open'))choices.push(sig.open);
+ if(opts.stopSources.includes('hard'))choices.push(direction==='bull'?entry*(1-opts.hardStopPct/100):entry*(1+opts.hardStopPct/100));
+ const valid=choices.filter(x=>Number.isFinite(x)&&x>0&&(direction==='bull'?x<entry:x>entry));
+ if(!valid.length)return {symbol,model,direction,strategy,time:sig.time,entry,entryTime,net:null,status:'invalid-stop',reason:'所选止损参考均无效'};
+ const stop=direction==='bull'?Math.max(...valid):Math.min(...valid);
+ const risk=Math.abs(entry-stop),sign=direction==='bull'?1:-1,last=Math.min(candles.length-1,i+horizon);
+ let exit=NaN,exitTime=0,reason='持仓周期到期',fav=0,adv=0,extreme=entry,trail=null,status='closed';
+ for(let j=i+1;j<=last;j++){
+  const bar=candles[j];
+  const target=getTarget(strategy,entry,risk,direction,series,j,opts);
+  const sh=direction==='bull'?bar.low<=stop:bar.high>=stop;
+  let th=false,mx=false;
+  if(strategy==='macd'){
+   const d=series.macd.dif,e=series.macd.dea;
+   mx=Number.isFinite(d[j])&&Number.isFinite(e[j])&&Number.isFinite(d[j-1])&&Number.isFinite(e[j-1])&&(direction==='bull'?d[j-1]>=e[j-1]&&d[j]<e[j]:d[j-1]<=e[j-1]&&d[j]>e[j]);
+  }
+  if(strategy==='trail'){
+   if(direction==='bull'){extreme=Math.max(extreme,bar.high);if((extreme/entry-1)*100>=opts.trailActivate)trail=extreme*(1-opts.trailGap/100);th=trail!=null&&bar.low<=trail;}
+   else{extreme=Math.min(extreme,bar.low);if((entry/extreme-1)*100>=opts.trailActivate)trail=extreme*(1+opts.trailGap/100);th=trail!=null&&bar.high>=trail;}
+  }else if(target!=null&&Number.isFinite(target))th=direction==='bull'?bar.high>=target:bar.low<=target;
+  if(sh||th){
+   const level=strategy==='trail'?trail:target;
+   const r=await resolveIntrabar(symbol,bar,entry,stop,th?level:null,direction,minuteCache);
+   if(r.kind==='unknown'){status='ambiguous';exitTime=bar.closeTime;reason='触发价位的分钟顺序无法确认';break;}
+   exit=r.price;exitTime=r.time;reason=r.kind==='stop'?'止损':'止盈';break;
+  }
+  if(mx){exit=bar.close;exitTime=bar.closeTime;reason='MACD反向信号';break;}
+  if(j===last){exit=bar.close;exitTime=bar.closeTime;reason=strategy==='time'?'持仓周期止盈':'评估周期到期';}
+ }
+ if(status==='ambiguous')return {symbol,model,direction,strategy,time:sig.time,entry,entryTime,net:null,status,exitReason:reason,stop};
+ if(!Number.isFinite(exit))return null;
+ for(let j=i+1;j<=last&&candles[j].time<=exitTime;j++){
+  const q=candles[j];if(q.closeTime<entryTime)continue;
+  fav=Math.max(fav,direction==='bull'?(q.high/entry-1)*100:(entry/q.low-1)*100);
+  adv=Math.min(adv,direction==='bull'?(q.low/entry-1)*100:(entry/q.high-1)*100);
+ }
+ if(reason==='止损')exit=direction==='bull'?exit*(1-opts.stopSlippage/100):exit*(1+opts.stopSlippage/100);
+ const gross=(exit/entry-1)*sign*100,fees=fee*(1+exit/entry),fund=fundingCost(direction,entryTime,exitTime,funding,opts.fundingMode,opts.manualFunding);
+ return {symbol,model,direction,strategy,time:sig.time,entryTime,entry,exit,exitTime,net:gross-fees-fund,gross,fees,fundingCost:fund,favorable:fav,adverse:adv,status,exitReason:reason,stop,stopSlippageApplied:reason==='止损'?opts.stopSlippage:0};
+}
 async function getSymbols(){const info=await get(API+'/fapi/v1/exchangeInfo');return info.symbols.filter(x=>x.status==='TRADING'&&x.contractType==='PERPETUAL'&&x.quoteAsset==='USDT').map(x=>x.symbol);}
 const CACHE_DB='emaRadarBacktestCache',CACHE_VERSION=1,CACHE_STORE='dailySymbols';
 function openCacheDB(){return new Promise((resolve,reject)=>{if(!('indexedDB' in window)){reject(Error('当前浏览器不支持本地缓存'));return;}const req=indexedDB.open(CACHE_DB,CACHE_VERSION);req.onupgradeneeded=()=>{const db=req.result;if(!db.objectStoreNames.contains(CACHE_STORE))db.createObjectStore(CACHE_STORE,{keyPath:'symbol'});};req.onsuccess=()=>resolve(req.result);req.onerror=()=>reject(req.error||Error('打开本地缓存失败'));});}

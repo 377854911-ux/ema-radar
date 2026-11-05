@@ -60,10 +60,9 @@ const $=id=>document.getElementById(id);
 let busy=false, auto=true, timer=null, filter='all', results=[], scanned=0, total=900, topSymbols=[], lastTop=0, soundOn=false, audioCtx=null, history=[], alertPending=false;
 let selectedIntervals=(()=>{try{const v=JSON.parse(localStorage.getItem('emaRadarIntervals')||'null');return Array.isArray(v)&&v.length?v.filter(x=>INTERVALS.includes(x)):[...INTERVALS];}catch(e){return [...INTERVALS];}})();
 let autoIntervalMinutes=Number(localStorage.getItem('emaRadarAutoInterval')||30)||30;
-const selectedModels=['ema'];
 const SIMPLE_DEFAULTS={ema:[25,50,100]};
 let simpleParams=(()=>{try{const v=JSON.parse(localStorage.getItem('simpleRadarIndicatorParams')||'null');return {ema:Array.isArray(v?.ema)&&v.ema.length===3?v.ema:SIMPLE_DEFAULTS.ema};}catch(e){return {ema:SIMPLE_DEFAULTS.ema};}})();
-try{history=JSON.parse(localStorage.getItem('emaRadarHistory')||'[]');if(!Array.isArray(history))history=[];}catch(e){history=[];}
+try{history=JSON.parse(localStorage.getItem('emaRadarHistory')||'[]');if(!Array.isArray(history))history=[];history=history.filter(h=>h&&h.model==='ema');}catch(e){history=[];}
 const sleep=ms=>new Promise(r=>setTimeout(r,ms));
 async function getJSON(url,attempt=0){const r=await fetch(url,{cache:'no-store'});if((r.status===429||r.status>=500)&&attempt<3){const retry=Number(r.headers.get('Retry-After'))||0;await sleep(Math.max(retry*1000,500*Math.pow(2,attempt)));return getJSON(url,attempt+1);}if(!r.ok)throw new Error('HTTP '+r.status);return r.json();}
 const candleMemory=new Map();let candleDbPromise=null;

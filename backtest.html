@@ -26,7 +26,7 @@ main{max-width:960px;margin:auto}.top{padding:20px 2px 14px}.back{display:inline
   <div class="field"><label for="trailGap">移动止盈回撤距离（%）</label><input id="trailGap" type="number" min="0.01" step="0.1" value="0.5"></div>
  </div>
  <div class="label" style="margin-top:14px">止盈策略（可多选；每种策略独立回测比较）</div>
- <div class="models" id="tpModels"><label><input type="checkbox" value="rr" checked> 固定盈亏比</label><label><input type="checkbox" value="pct"> 固定收益率</label><label><input type="checkbox" value="ema"> EMA均线</label><label><input type="checkbox" <label><input type="checkbox" value="macd"> MACD反向信号</label><label><input type="checkbox" value="time"> 持仓周期</label><label><input type="checkbox" value="trail"> 移动止盈</label><label><input type="checkbox" value="none"> 不设固定止盈</label></div>
+ <div class="models" id="tpModels"><label><input type="checkbox" value="rr" checked> 固定盈亏比</label><label><input type="checkbox" value="pct"> 固定收益率</label><label><input type="checkbox" value="ema"> EMA均线</label><label><input type="checkbox" value="macd"> MACD反向信号</label><label><input type="checkbox" value="time"> 持仓周期</label><label><input type="checkbox" value="trail"> 移动止盈</label><label><input type="checkbox" value="none"> 不设固定止盈</label></div>
  <div class="pill">当前回测模型：EMA模型（多空双向）</div>
  <div class="field"><label for="universe">历史每日交易池</label><select id="universe"><option value="100" selected>历史日榜前100 USDT永续</option><option value="50">历史日榜前50</option><option value="20">历史日榜前20</option></select></div>
  <div class="panel" style="margin-top:12px"><div class="section"><h2>90天历史成交额本地缓存</h2><span class="pill">iPhone本地保存</span></div><div class="status" id="cacheStatus">正在读取本地缓存状态…</div><div class="actions"><button type="button" class="btn secondary" id="buildCache">建立/补齐缓存</button><button type="button" class="btn secondary" id="clearCache">清除本地缓存</button></div><div class="note">首次会读取当前可查询的USDT永续合约过去90天日线成交额，并逐个保存到本机。中途离开页面，已完成的合约会保留；下次继续时会跳过已缓存合约。缓存只保存每日成交额数据，不保存完整K线。</div></div>
@@ -56,11 +56,10 @@ main{max-width:960px;margin:auto}.top{padding:20px 2px 14px}.back{display:inline
 <script>
 const API='https://fapi.binance.com', $=id=>document.getElementById(id);
 const DEFAULT={ema:{fast:25,mid:50,slow:100},macd:{fast:12,slow:26,signal:9}};
-let settings=load('emaRadarIndicatorSettings',DEFAULT),simple=load('simpleRadarIndicatorParams',{ema:[25,50,100],ma:[5,10,30]});
+let settings=load('emaRadarIndicatorSettings',DEFAULT),simple=load('simpleRadarIndicatorParams',{ema:[25,50,100]});
 let stopRequested=false,running=false,rows=[],taskDone=0,taskTotal=0;
 function cloneDefault(d){try{if(typeof structuredClone==='function')return structuredClone(d);}catch(e){}return JSON.parse(JSON.stringify(d));}
 function load(k,d){try{return Object.assign(cloneDefault(d),JSON.parse(localStorage.getItem(k)||'{}'));}catch(e){return cloneDefault(d);}}
-function getSimple(){try{const x=JSON.parse(localStorage.getItem('simpleRadarIndicatorParams')||'null');return {ema:Array.isArray(x?.ema)&&x.ema.length===3?x.ema:[25,50,100]};}catch(e){return {ema:[25,50,100]};}}
 const activeRequests=new Set();async function get(url){let last;for(let attempt=0;attempt<3;attempt++){if(stopRequested)throw Error('已停止');const controller=new AbortController();activeRequests.add(controller);const timer=setTimeout(()=>controller.abort(),18000);try{const r=await fetch(url,{cache:'no-store',signal:controller.signal});if(!r.ok){const err=Error('行情请求失败 HTTP '+r.status);err.status=r.status;if(r.status===418||r.status===429||r.status>=500){last=err;const retry=Number(r.headers.get('Retry-After'));await sleep(Math.max(800*(attempt+1),Number.isFinite(retry)&&retry>0?retry*1000:0));continue;}throw err;}return await r.json();}catch(e){last=e;if(stopRequested)throw Error('已停止');if(e.status&&e.status!==418&&e.status!==429&&e.status<500)throw e;if(attempt<2)await sleep(700*(attempt+1));}finally{clearTimeout(timer);activeRequests.delete(controller);}}throw last||Error('行情请求连续失败');}
 const sleep=ms=>new Promise(r=>setTimeout(r,ms));
 function ema(v,n){const a=Array(v.length).fill(NaN);if(v.length<n)return a;let s=0;for(let i=0;i<n;i++)s+=v[i];let p=s/n;a[n-1]=p;const k=2/(n+1);for(let i=n;i<v.length;i++){p=v[i]*k+p*(1-k);a[i]=p;}return a;}

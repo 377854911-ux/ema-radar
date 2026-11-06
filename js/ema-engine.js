@@ -5,6 +5,9 @@
 
 export const EMA_PERIODS = Object.freeze([25, 50, 100]);
 
+// Keep live scanning and historical backtests on the same EMA warm-up baseline.
+export const EMA_WARMUP_BARS = 500;
+
 export const TIMEFRAME_MINUTES = Object.freeze({
   "15m": 15, "30m": 30,
   "1h": 60, "2h": 120, "4h": 240,
@@ -81,16 +84,28 @@ function isValidCandle(candle) {
 
 /**
  * Evaluate only the latest completed candle.
- * The final candle in the input MUST be the currently forming candle.
+ * Requires 500 contiguous completed candles before evaluating the latest close.\n * The final candle in the input MUST be the currently forming candle.
  * This makes an old signal expire automatically once its following candle closes.
  */
 export function analyzeLatestClosedSignal(rawCandles, options = {}) {
   const { timeframe = null, maxBodyPercent = null } = options;
-  if (!Array.isArray(rawCandles) || rawCandles.length < 101) {
+  if (!Array.isArray(rawCandles) || rawCandles.length < EMA_WARMUP_BARS + 2) {
     return { signal: null, reason: "not_enough_candles" };
   }
 
   const candles = rawCandles.map(normalizeCandle);
+  if (TIMEFRAME_MINUTES[timeframe]) {
+    const intervalMs = TIMEFRAME_MINUTES[timeframe] * 60_000;
+    const history = candles.slice(-(EMA_WARMUP_BARS + 2));
+    for (let i = 0; i < history.length; i += 1) {
+      const candle = history[i];
+      if (!Number.isFinite(candle.openTime) || !Number.isFinite(candle.closeTime)
+          || candle.closeTime !== candle.openTime + intervalMs - 1
+          || (i > 0 && candle.openTime - history[i - 1].openTime !== intervalMs)) {
+        return { signal: null, reason: "insufficient_contiguous_candles" };
+      }
+    }
+  }
   const forming = candles[candles.length - 1];
   const signalIndex = candles.length - 2;
   const signalCandle = candles[signalIndex];

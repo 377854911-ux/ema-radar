@@ -111,6 +111,24 @@ test("funding is direction-aware and missing funding marks trade incomplete", ()
     fundingEvents: [{ fundingTime: 15, rate: 0.001, markPrice: 100 }]
   });
   assert.equal(long.fundingPnl, -0.5);
+  const short = simulateTrade({
+    candles: data, signalIndex: 0, direction: "SHORT",
+    config: { ...base, rr: 1 },
+    fundingEvents: [{ fundingTime: 15, rate: 0.001, markPrice: 100 }]
+  });
+  assert.equal(short.fundingPnl, 0.5);
+  const negativeLong = simulateTrade({
+    candles: data, signalIndex: 0, direction: "LONG",
+    config: { ...base, rr: 1 },
+    fundingEvents: [{ fundingTime: 15, rate: -0.001, markPrice: 100 }]
+  });
+  assert.equal(negativeLong.fundingPnl, 0.5);
+  const negativeShort = simulateTrade({
+    candles: data, signalIndex: 0, direction: "SHORT",
+    config: { ...base, rr: 1 },
+    fundingEvents: [{ fundingTime: 15, rate: -0.001, markPrice: 100 }]
+  });
+  assert.equal(negativeShort.fundingPnl, -0.5);
   const missing = simulateTrade({
     candles: data, signalIndex: 0, direction: "LONG",
     config: { ...base, rr: 1 },

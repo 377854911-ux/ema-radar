@@ -166,3 +166,38 @@ test("reports positions that remain open at the end of the backtest window", asy
   assert.equal(result.accepted[0].status, "open");
   assert.equal(result.report.openTrades, 1);
 });
+
+
+test("emits provisional closed/open portfolio counts after each scanned timeframe", async () => {
+  const progress = [];
+  const result = await runHistoricalBacktest(makeDataset(), {
+    timeframes: ["15m"],
+    initialCapital: 10_000,
+    maxOpenTrades: 5,
+    tradeConfig
+  }, { onProgress: update => progress.push(update) });
+
+  const portfolioUpdate = progress.find(update => update.phase === "portfolio-progress");
+  assert.ok(portfolioUpdate);
+  assert.equal(portfolioUpdate.closedTrades, 1);
+  assert.equal(portfolioUpdate.openTrades, 0);
+  assert.equal(portfolioUpdate.acceptedTrades, 1);
+  assert.equal(portfolioUpdate.signalsFound, 1);
+  assert.equal(result.report.totalTrades, 1);
+});
+
+test("reports progress for a series with insufficient candle history", async () => {
+  const dataset = makeDataset();
+  dataset.candlesBySymbolTimeframe["TESTUSDT|15m"] = dataset.candlesBySymbolTimeframe["TESTUSDT|15m"].slice(0, 50);
+  const progress = [];
+  const result = await runHistoricalBacktest(dataset, {
+    timeframes: ["15m"],
+    initialCapital: 10_000,
+    maxOpenTrades: 5,
+    tradeConfig
+  }, { onProgress: update => progress.push(update) });
+
+  assert.equal(result.scanStats.symbolTimeframeSeries, 1);
+  assert.equal(progress.filter(update => update.phase === "series-scan").length, 1);
+  assert.equal(progress[0].symbolTimeframeSeries, 1);
+});

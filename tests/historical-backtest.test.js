@@ -85,6 +85,9 @@ test("connects fresh EMA signals to trade execution and portfolio reporting", ()
   assert.equal(result.accepted[0].exitReason, "take_profit");
   assert.equal(result.report.totalTrades, 1);
   assert.equal(result.report.takeProfitCount, 1);
+  assert.equal(result.datasetStats.symbolsIncluded, 1);
+  assert.equal(result.datasetStats.dailyUniverseDays, 1);
+  assert.equal(result.datasetStats.candleSeries, 1);
   assert.ok(result.report.netProfit > 0);
 });
 

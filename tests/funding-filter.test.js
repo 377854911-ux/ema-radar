@@ -26,3 +26,24 @@ test("selects only the latest settled funding rate known before the signal close
   assert.deepEqual(known, { fundingTime: 200, rate: 0.0002 });
   assert.equal(latestKnownFundingRate([{ fundingTime: 100, rate: null }], 200), null);
 });
+
+test("does not fall back to an older rate when the latest settled rate is missing", () => {
+  const events = [
+    { fundingTime: 100, rate: 0.00001 },
+    { fundingTime: 200, rate: null }
+  ];
+  assert.equal(latestKnownFundingRate(events, 300), null);
+});
+
+test("rejects conflicting rates at the latest settled funding timestamp", () => {
+  const events = [
+    { fundingTime: 100, rate: 0.00001 },
+    { fundingTime: 200, rate: 0.00002 },
+    { fundingTime: 200, rate: 0.00003 }
+  ];
+  assert.equal(latestKnownFundingRate(events, 300), null);
+  assert.deepEqual(latestKnownFundingRate([
+    { fundingTime: 200, rate: "0.00002" },
+    { fundingTime: 200, rate: 0.00002 }
+  ], 300), { fundingTime: 200, rate: 0.00002 });
+});

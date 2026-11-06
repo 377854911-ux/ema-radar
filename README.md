@@ -8,7 +8,8 @@ Mobile-first Binance USDⓈ-M USDT perpetual scanner using public market data on
 - Production branch `main` remains untouched.
 - Backup branch `backup/pre-ema-rebuild-20261106` remains unchanged.
 - V1 currently includes the EMA25 / EMA50 / EMA100 signal engine, public market scanner, timeframe selection, per-timeframe candle-body filters, manual scan, configurable auto-scan interval, and local settings persistence.
-- Backtesting, historical data storage, trade simulation, capital accounting, and full settings export/import are not implemented yet.
+- A standalone single-trade execution engine is now implemented and covered by unit tests: three entry modes, mandatory hard stop plus one auxiliary stop, fixed RR take-profit, timeout close, fees, configurable slippage, funding-rate handling, and conservative same-candle stop/TP ordering.
+- The complete historical backtest runner is still in progress: historical daily top-100 universe, cached Klines/funding data, multi-position scheduling, max-five capacity, opposite-direction blocking, simulated capital replenishment, report integration, settings export/import, and iPhone UI are not yet implemented.
 - Do not use the production Pages URL as a preview of this branch; no production deployment has been made.
 
 ## Safety scope

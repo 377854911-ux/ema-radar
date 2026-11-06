@@ -520,10 +520,14 @@ test("funding settlements across symbols are applied in global timestamp order",
 
 
 test("same symbol can hold multiple same-direction positions from different signal times", () => {
-  const candles = longCandles();
+  const firstCandles = longCandles();
+  const secondCandles = longCandles();
+  secondCandles[1] = {
+    openTime: 10, closeTime: 19, open: 99, high: 101, low: 98, close: 100
+  };
   const candidates = [
-    { symbol: "REENTRYUSDT", timeframe: "1h", direction: "LONG", distanceRate: 0.1, candles, signalIndex: 0, config },
-    { symbol: "REENTRYUSDT", timeframe: "1h", direction: "LONG", distanceRate: 0.1, candles, signalIndex: 1, config }
+    { symbol: "REENTRYUSDT", timeframe: "1h", direction: "LONG", distanceRate: 0.1, candles: firstCandles, signalIndex: 0, config },
+    { symbol: "REENTRYUSDT", timeframe: "1h", direction: "LONG", distanceRate: 0.1, candles: secondCandles, signalIndex: 1, config }
   ];
 
   const allowed = simulatePortfolio(candidates, { maxOpenTrades: 2 });

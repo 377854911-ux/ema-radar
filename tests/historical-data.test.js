@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { buildDailyUniverse, normalizeKline, fetchBacktestDataset, EMA_WARMUP_BARS, fetchFundingHistory } from "../js/historical-data.js";
+import { buildDailyUniverse, normalizeKline, fetchBacktestDataset, EMA_WARMUP_BARS, fetchFundingHistory, fetchKlinesRange } from "../js/historical-data.js";
 
 test("normalizes Binance kline fields including quote turnover", () => {
   const candle = normalizeKline([0,"100","110","90","105","12",86399999,"1234"]);
@@ -156,4 +156,15 @@ test("funding history preserves conflicting same-time records for downstream amb
   assert.deepEqual(events.filter(event => event.fundingTime === 500).map(event => event.markPrice), [100, 101]);
   assert.equal(events.filter(event => event.fundingTime === 600).length, 1);
   assert.equal(cachedValue.length, 3);
+});
+
+test("rejects conflicting duplicate historical kline rows instead of choosing one", async () => {
+  const row = [100, "100", "102", "99", "101", "10", 199, "1000"];
+  const conflicting = [...row];
+  conflicting[4] = "100.5";
+  await assert.rejects(() => fetchKlinesRange({
+    symbol: "TESTUSDT", interval: "15m", startTime: 100, endTime: 1000,
+    cache: { async get() { return null; }, async put() { throw new Error("must not cache invalid rows"); } },
+    fetchImpl: async () => ({ ok: true, json: async () => [row, conflicting] })
+  }), /Conflicting Binance kline records/);
 });

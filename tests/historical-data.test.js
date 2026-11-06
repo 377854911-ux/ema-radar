@@ -62,3 +62,15 @@ test("downloads enough pre-period candles to warm up EMA100", async () => {
     startTime - EMA_WARMUP_BARS * 900_000);
   assert.equal(EMA_WARMUP_BARS, 500);
 });
+
+test("rejects the unsupported 10-minute Binance futures interval", async () => {
+  await assert.rejects(
+    fetchBacktestDataset({
+      startTime: 1_800_000_000_000,
+      endTime: 1_800_086_400_000,
+      timeframes: ["10m"],
+      fetchImpl: async () => { throw new Error("network should not be called"); }
+    }),
+    /Unsupported timeframe: 10m/
+  );
+});

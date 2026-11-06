@@ -198,11 +198,14 @@ export function simulateTrade({ candles, signalIndex, direction, config, funding
     if (time >= entryTime && time <= exit.time) {
       const entryBar = candles[entryIndex];
       const exitBar = candles[exit.index];
+      const uncertainEntryTimestamp = time === entryTime;
       const uncertainLimitEntry = config.entryMethod === "retracement_limit"
         && time > entryBar.openTime && time <= (entryBar.closeTime ?? entryBar.openTime);
+      const uncertainExitTimestamp = time === exit.time;
       const uncertainIntrabarExit = exit.reason !== "timeout"
         && time > exitBar.openTime && time <= (exitBar.closeTime ?? exitBar.openTime);
-      if (uncertainLimitEntry || uncertainIntrabarExit) {
+      if (uncertainEntryTimestamp || uncertainLimitEntry
+          || uncertainExitTimestamp || uncertainIntrabarExit) {
         fundingComplete = false;
         continue;
       }

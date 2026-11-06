@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { simulateTrade, summarizeBacktest } from "../js/backtest-engine.js";
 
 const candles = [
-  { openTime: 0, closeTime: 59_999, open: 100, high: 101, low: 99, close: 100 },
+  { openTime: 0, closeTime: 59_999, open: 98, high: 101, low: 97, close: 100 },
   { openTime: 60_000, closeTime: 119_999, open: 100, high: 111, low: 99, close: 110 },
   { openTime: 120_000, closeTime: 179_999, open: 110, high: 112, low: 109, close: 111 },
   { openTime: 180_000, closeTime: 239_999, open: 111, high: 112, low: 108, close: 109 },
@@ -34,7 +34,7 @@ test("next-open entry and take-profit are calculated from actual entry", () => {
 
 test("same-candle stop and target collision resolves conservatively to stop", () => {
   const data = [
-    { openTime: 0, closeTime: 9, open: 100, high: 101, low: 99, close: 100 },
+    { openTime: 0, closeTime: 9, open: 98, high: 101, low: 97, close: 100 },
     { openTime: 10, closeTime: 19, open: 100, high: 105, low: 97, close: 101 },
     { openTime: 20, closeTime: 29, open: 101, high: 102, low: 100, close: 101 }
   ];
@@ -83,7 +83,8 @@ test("market-style exit slippage is adverse and fees are itemized", () => {
 test("timeout counts complete candles after entry", () => {
   const result = simulateTrade({
     candles, signalIndex: 0, direction: "LONG",
-    config: { ...base, timeoutBars: 2, rr: 5 }
+    config: { ...base, timeoutBars: 2, rr: 5 },
+    candles: candles.map((c, i) => i === 1 ? { ...c, high: 105 } : c).map((c, i) => i === 2 ? { ...c, high: 105 } : c)
   });
   assert.equal(result.exitReason, "timeout");
   assert.equal(result.exitIndex, 2);

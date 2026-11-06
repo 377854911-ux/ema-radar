@@ -114,7 +114,7 @@ export function runHistoricalBacktest(dataset, config = {}, options = {}) {
           distanceRate: result.signal.distanceRate,
           candles,
           signalIndex,
-          config: config.tradeConfig,
+          config: { ...config.tradeConfig, ...settings.tradeConfig },
           fundingEvents
         });
         scanStats.signalsFound++;
@@ -133,9 +133,12 @@ export function runHistoricalBacktest(dataset, config = {}, options = {}) {
     initialCapital,
     maxOpenTrades
   });
-  const incompleteOrUnclassifiable = portfolio.accepted.filter(trade =>
-    trade.status === "incomplete" || trade.status === "unclassifiable"
-  );
+  const incompleteOrUnclassifiable = [
+    ...portfolio.accepted.filter(trade =>
+      trade.status === "incomplete" || trade.status === "unclassifiable"
+    ),
+    ...portfolio.skipped.filter(item => item.trade?.status === "unclassifiable").map(item => item.trade)
+  ];
 
   return {
     period: {

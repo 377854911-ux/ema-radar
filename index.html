@@ -166,9 +166,13 @@ function saveSettings() {
     $("saveStatus").textContent = "自定义资金费率阈值必须是大于0的数字。";
     return;
   }
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(settings));
-  $("saveStatus").textContent = "设置已保存在这台设备的浏览器中。";
-  if (autoTimer) startAutoScan();
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(settings));
+    $("saveStatus").textContent = "设置已保存在这台设备的浏览器中。";
+    if (autoTimer) startAutoScan();
+  } catch {
+    $("saveStatus").textContent = "保存失败：浏览器存储不可用或空间不足。请检查 Safari 存储设置。";
+  }
 }
 function setStatus(message) { $("status").textContent = message; }
 function fmt(value, digits = 3) {

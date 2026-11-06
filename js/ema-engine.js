@@ -165,23 +165,22 @@ export function analyzeLatestClosedSignal(rawCandles, options = {}) {
  * When the same symbol qualifies on multiple timeframes, retain only the shortest.
  */
 export function rankAndDeduplicateSignals(signals) {
-  const sorted = [...signals].filter(Boolean).sort((a, b) => {
-    const distance = a.distanceRate - b.distanceRate;
-    if (distance !== 0) return distance;
-    return (TIMEFRAME_MINUTES[a.timeframe] ?? Infinity)
-      - (TIMEFRAME_MINUTES[b.timeframe] ?? Infinity);
-  });
-
-  const chosenBySymbolAndDirection = new Map();
-  for (const signal of sorted) {
-    const key = signal.symbol + ":" + signal.direction;
-    const current = chosenBySymbolAndDirection.get(key);
-    if (!current || (TIMEFRAME_MINUTES[signal.timeframe] ?? Infinity)
-      < (TIMEFRAME_MINUTES[current.timeframe] ?? Infinity)) {
-      chosenBySymbolAndDirection.set(key, signal);
+  // For each symbol, first choose its shortest qualifying timeframe,
+  // even when the EMA-distance scores differ. Then rank those candidates.
+  const shortestBySymbol = new Map();
+  for (const signal of signals.filter(Boolean)) {
+    const current = shortestBySymbol.get(signal.symbol);
+    const candidateMinutes = TIMEFRAME_MINUTES[signal.timeframe] ?? Infinity;
+    const currentMinutes = current ? (TIMEFRAME_MINUTES[current.timeframe] ?? Infinity) : Infinity;
+    if (!current || candidateMinutes < currentMinutes) {
+      shortestBySymbol.set(signal.symbol, signal);
+    } else if (candidateMinutes === currentMinutes
+      && signal.distanceRate < current.distanceRate) {
+      shortestBySymbol.set(signal.symbol, signal);
     }
   }
-  return [...chosenBySymbolAndDirection.values()].sort((a, b) =>
+
+  return [...shortestBySymbol.values()].sort((a, b) =>
     a.distanceRate - b.distanceRate
   );
 }

@@ -566,7 +566,7 @@ test("funding settlements across symbols are applied in global timestamp order",
 });
 
 
-test("same symbol can hold multiple same-direction positions from different signal times", () => {
+test("same symbol rejects overlapping same-direction positions from different signal times", () => {
   const firstCandles = longCandles();
   const secondCandles = longCandles();
   secondCandles[1] = {

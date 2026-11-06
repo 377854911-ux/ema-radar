@@ -59,7 +59,7 @@ test("capital and position slot are released before an entry at the same timesta
   const secondCandles = [
     { openTime: 0, closeTime: 9, open: 98, high: 101, low: 97, close: 100 },
     { openTime: 10, closeTime: 19, open: 99, high: 101, low: 98, close: 100 },
-    { openTime: 20, closeTime: 29, open: 100, high: 103, low: 99, close: 102 },
+    { openTime: 20, closeTime: 29, open: 100, high: 103, low: 100, close: 102 },
     { openTime: 30, closeTime: 39, open: 102, high: 103, low: 101, close: 102 }
   ];
   const signalCloseConfig = { ...config, entryMethod: "signal_close", positionNotional: 700 };

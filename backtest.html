@@ -133,7 +133,7 @@ function validate(){
 function fmt(v,d=2){return v===null||v===undefined||!Number.isFinite(Number(v))?"—":Number(v).toLocaleString("en-US",{maximumFractionDigits:d})}
 function fmtTradeTime(value){
  if(value===null||value===undefined||!Number.isFinite(Number(value)))return "—";
- return new Date(Number(value)).toLocaleString("zh-CN",{year:"numeric",month:"2-digit",day:"2-digit",hour:"2-digit",minute:"2-digit",second:"2-digit",hour12:false});
+ return new Date(Number(value)).toLocaleString("zh-CN",{timeZone:"Africa/Conakry",year:"numeric",month:"2-digit",day:"2-digit",hour:"2-digit",minute:"2-digit",second:"2-digit",hour12:false})+"（几内亚时间）";
 }
 function fmtHoldingDuration(start,end){
  if(!Number.isFinite(Number(start))||!Number.isFinite(Number(end))||Number(end)<Number(start))return "—";
@@ -152,7 +152,7 @@ function addLiveSignal(signal){
  const count=Number($("signalCount").textContent||0)+1;
  $("signalCount").textContent=String(count);
  const row=document.createElement("div");row.className="live-signal";
- const time=new Date(signal.signalTime).toLocaleString();
+ const time=new Date(signal.signalTime).toLocaleString("zh-CN",{timeZone:"Africa/Conakry",year:"numeric",month:"2-digit",day:"2-digit",hour:"2-digit",minute:"2-digit",second:"2-digit",hour12:false})+"（几内亚时间）";
  row.textContent=signal.symbol+" · "+signal.timeframe+" · "+(signal.direction==="LONG"?"多头 ↑":"空头 ↓")+" · "+time;
  if($("liveSignals").firstElementChild?.textContent.startsWith("正在扫描"))$("liveSignals").innerHTML="";
  $("liveSignals").prepend(row);

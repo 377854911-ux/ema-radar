@@ -168,7 +168,8 @@ test("reports positions that remain open at the end of the backtest window", asy
   const result = await runHistoricalBacktest(dataset, {
     timeframes: ["15m"], initialCapital: 10_000, maxOpenTrades: 5, tradeConfig
   });
-  assert.equal(result.accepted.length, 1);
+  assert.equal(result.scanStats.signalsFound, 1, JSON.stringify({ scanStats: result.scanStats, skipped: result.skipped.map(item => item.reason) }));
+  assert.equal(result.accepted.length, 1, JSON.stringify({ accepted: result.accepted, skipped: result.skipped.map(item => item.reason) }));
   assert.equal(result.accepted[0].status, "open");
   assert.equal(result.report.openTrades, 1);
 });

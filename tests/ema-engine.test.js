@@ -86,7 +86,7 @@ test("rejects a bullish candle with correct EMA ordering when one EMA is outside
   const e25 = calculateEMA(closes, 25).at(-1);
   const e50 = calculateEMA(closes, 50).at(-1);
   const e100 = calculateEMA(closes, 100).at(-1);
-  const open = e100 + 0.01;
+  const open = e100 + 0.5;
   const close = Math.max(e25, e50) + 1;
   candles.push(makeCandle(30_000_000, open, close + 0.1, open - 0.1, close));
   candles.push(makeCandle(30_060_000, close, close + 0.2, close - 0.2, close + 0.1));

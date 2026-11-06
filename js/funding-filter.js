@@ -21,16 +21,29 @@ export function isFundingRateAllowed(rate, thresholdPct) {
  */
 export function latestKnownFundingRate(events, knownAt) {
   if (!Array.isArray(events) || !Number.isFinite(knownAt)) return null;
-  let latest = null;
+  let latestTime = -Infinity;
+  let latestRate;
+  let hasLatest = false;
+  let conflict = false;
+  const sameRate = (a, b) => a === b
+    || (a !== null && a !== undefined && a !== "" && b !== null && b !== undefined && b !== ""
+      && Number.isFinite(Number(a)) && Number.isFinite(Number(b))
+      && Number(a) === Number(b));
+
   for (const event of events) {
     const time = Number(event?.fundingTime);
-    const rawRate = event?.rate;
-    const rate = Number(rawRate);
-    if (rawRate !== null && rawRate !== undefined && rawRate !== ""
-        && Number.isFinite(time) && time < knownAt && Number.isFinite(rate)
-        && (!latest || time > latest.fundingTime)) {
-      latest = { fundingTime: time, rate };
+    if (!Number.isFinite(time) || time >= knownAt) continue;
+    if (time > latestTime) {
+      latestTime = time;
+      latestRate = event?.rate;
+      hasLatest = true;
+      conflict = false;
+    } else if (time === latestTime && !sameRate(latestRate, event?.rate)) {
+      conflict = true;
     }
   }
-  return latest;
+
+  if (!hasLatest || conflict || latestRate === null || latestRate === undefined
+      || latestRate === "" || !Number.isFinite(Number(latestRate))) return null;
+  return { fundingTime: latestTime, rate: Number(latestRate) };
 }

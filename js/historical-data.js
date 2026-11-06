@@ -211,8 +211,11 @@ export async function buildHistoricalTop100({
 }
 
 export async function fetchFundingHistory({
-  symbol, startTime, endTime, fetchImpl = fetch
+  symbol, startTime, endTime, fetchImpl = fetch, cache = createHistoricalCache()
 }) {
+  const cacheKey = `funding|${symbol}|${startTime}|${endTime}`;
+  const cached = await cache.get(cacheKey);
+  if (cached) return cached;
   const all = [];
   let cursor = startTime;
   while (cursor < endTime) {
@@ -233,8 +236,10 @@ export async function fetchFundingHistory({
     cursor = next;
     if (rows.length < 1000) break;
   }
-  return [...new Map(all.map(item => [item.fundingTime, item])).values()]
+  const unique = [...new Map(all.map(item => [item.fundingTime, item])).values()]
     .sort((a, b) => a.fundingTime - b.fundingTime);
+  await cache.put(cacheKey, unique, `${symbol}|funding`);
+  return unique;
 }
 
 export const HISTORICAL_DAY_MS = DAY;
@@ -283,7 +288,7 @@ export async function fetchBacktestDataset({
     return [`${task.symbol}|${task.timeframe}`, candles];
   });
   const fundingResults = await mapLimit(symbols, concurrency, async symbol => {
-    const events = await fetchFundingHistory({ symbol, startTime, endTime, fetchImpl });
+    const events = await fetchFundingHistory({ symbol, startTime, endTime, fetchImpl, cache });
     completed++;
     onProgress({ phase: "funding", completed, total, symbol });
     return [symbol, events];

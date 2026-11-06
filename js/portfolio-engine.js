@@ -120,18 +120,16 @@ export function simulatePortfolio(candidates, options = {}) {
   }
 
   function settleUntil(timestamp) {
-    // Funding paid/received by existing open positions must affect available
-    // cash before deciding whether a later candidate can be opened.
-    applyOpenFundingUntil(timestamp);
     const due = accepted
       .filter(item => !settled.has(item) && item.trade.exitTime != null && item.trade.exitTime <= timestamp)
       .sort((a, b) => a.trade.exitTime - b.trade.exitTime || a.candidate._index - b.candidate._index);
 
-    // All trades closing at the same timestamp form one settlement batch.
-    // This prevents candidate ordering from changing the loss-streak/top-up logic.
+    // Process funding and exits in timestamp order. Funding at an exit's
+    // timestamp is applied before that timestamp's settlement batch.
     let cursor = 0;
     while (cursor < due.length) {
       const exitTime = due[cursor].trade.exitTime;
+      applyOpenFundingUntil(exitTime);
       const batch = [];
       while (cursor < due.length && due[cursor].trade.exitTime === exitTime) {
         const item = due[cursor++];
@@ -187,7 +185,7 @@ export function simulatePortfolio(candidates, options = {}) {
 
       // Do not make a partial streak decision when any trade in this timestamp
       // has unknown cash flows. Ambiguous trades are excluded from the batch PnL.
-      if (batchIncomplete || !batchHasClassifiableOutcome) continue;
+      if (batchIncomplete || !batchHasClassifiableOutcome || !capitalAccountingComplete) continue;
 
       if (batchNetPnl < 0) {
         lossStreak += 1;
@@ -235,6 +233,9 @@ export function simulatePortfolio(candidates, options = {}) {
         });
       }
     }
+    // Include later funding cash flows only after all earlier exit batches
+    // have been settled, so they cannot distort earlier replenishment logic.
+    applyOpenFundingUntil(timestamp);
   }
 
   for (const item of prepared) {

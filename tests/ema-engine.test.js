@@ -94,3 +94,10 @@ test("same symbol always keeps its shortest qualifying timeframe before ranking"
   assert.equal(ranked[1].timeframe, "15m");
   assert.equal(ranked[1].direction, "SHORT");
 });
+
+test("supported timeframes match intervals available from Binance futures klines", async () => {
+  const { TIMEFRAME_MINUTES } = await import("../js/ema-engine.js");
+  assert.equal(Object.hasOwn(TIMEFRAME_MINUTES, "10m"), false);
+  assert.equal(TIMEFRAME_MINUTES["15m"], 15);
+  assert.equal(TIMEFRAME_MINUTES["30m"], 30);
+});

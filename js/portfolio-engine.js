@@ -11,7 +11,7 @@ export function simulatePortfolio(candidates, options = {}) {
   if (!Array.isArray(candidates)) throw new TypeError("candidates must be an array");
   const maxOpenTrades = options.maxOpenTrades ?? 5;
   const initialCapital = Number(options.initialCapital ?? 10_000);
-  if (!Number.isInteger(maxOpenTrades) || maxOpenTrades < 1) throw new RangeError("maxOpenTrades must be a positive integer");
+  if (!Number.isInteger(maxOpenTrades) || maxOpenTrades < 1 || maxOpenTrades > 5) throw new RangeError("maxOpenTrades must be an integer from 1 to 5");
   if (!Number.isFinite(initialCapital) || initialCapital <= 0) throw new RangeError("initialCapital must be positive");
 
   const normalized = candidates.map((candidate, index) => {

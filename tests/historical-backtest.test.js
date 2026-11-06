@@ -203,3 +203,51 @@ test("reports progress for a series with insufficient candle history", async () 
   assert.equal(progress[0].totalSeriesCount, 1);
   assert.equal(result.scanStats.totalSeriesCount, 1);
 });
+
+
+test("historical funding filter uses the latest rate settled before the signal close", async () => {
+  const high = makeDataset();
+  high.fundingBySymbol.TESTUSDT = [{ fundingTime: 90_000_000, rate: 0.0002, markPrice: 100 }];
+  const rejected = await runHistoricalBacktest(high, {
+    timeframes: ["15m"], initialCapital: 10_000, maxOpenTrades: 5,
+    fundingFilterPct: 0.01, tradeConfig
+  });
+  assert.equal(rejected.scanStats.signalsFound, 0);
+  assert.equal(rejected.scanStats.fundingFilteredSignals, 1);
+  assert.equal(rejected.scanStats.fundingRateUnavailableSignals, 0);
+
+  const low = makeDataset();
+  low.fundingBySymbol.TESTUSDT = [{ fundingTime: 90_000_000, rate: -0.00005, markPrice: 100 }];
+  const accepted = await runHistoricalBacktest(low, {
+    timeframes: ["15m"], initialCapital: 10_000, maxOpenTrades: 5,
+    fundingFilterPct: 0.01, tradeConfig
+  });
+  assert.equal(accepted.scanStats.signalsFound, 1);
+  assert.equal(accepted.scanStats.fundingFilteredSignals, 0);
+  assert.equal(accepted.accepted.length, 1);
+});
+
+test("historical funding filter does not use a rate settled after the signal", async () => {
+  const dataset = makeDataset();
+  dataset.fundingBySymbol.TESTUSDT = [
+    { fundingTime: 90_000_000, rate: 0.00005, markPrice: 100 },
+    { fundingTime: 100_000_000, rate: 0.0005, markPrice: 100 }
+  ];
+  const result = await runHistoricalBacktest(dataset, {
+    timeframes: ["15m"], initialCapital: 10_000, maxOpenTrades: 5,
+    fundingFilterPct: 0.01, tradeConfig
+  });
+  assert.equal(result.scanStats.signalsFound, 1);
+  assert.equal(result.scanStats.fundingFilteredSignals, 0);
+});
+
+test("historical funding filter rejects a signal when no prior settled rate is available", async () => {
+  const dataset = makeDataset();
+  dataset.fundingBySymbol.TESTUSDT = [];
+  const result = await runHistoricalBacktest(dataset, {
+    timeframes: ["15m"], initialCapital: 10_000, maxOpenTrades: 5,
+    fundingFilterPct: 0.01, tradeConfig
+  });
+  assert.equal(result.scanStats.signalsFound, 0);
+  assert.equal(result.scanStats.fundingRateUnavailableSignals, 1);
+});

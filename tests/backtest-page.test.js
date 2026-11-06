@@ -39,8 +39,8 @@ test("live scanner and historical backtest expose the same saved funding thresho
 
 test("live scanner page contains a syntactically valid module script", () => {
   const html = readFileSync(new URL("../index.html", import.meta.url), "utf8");
-  const match = html.match(/<script type="module">([\\s\\S]*?)<\\/script>/);
+  const match = html.match(/<script type="module">([\s\S]*?)<\/script>/);
   assert.ok(match, "scanner page module script should exist");
-  const source = match[1].replace(/^import\\s+.*?;\\s*$/gm, "");
+  const source = match[1].replace(/^import\s+.*?;\s*$/gm, "");
   assert.doesNotThrow(() => new vm.Script(source));
 });

@@ -422,6 +422,7 @@ export function simulatePortfolio(candidates, options = {}) {
     accepted: completedTrades,
     skipped,
     summary,
+    equityCurve,
     capital: {
       accountBalance: capitalAccountingComplete ? accountBalance : null,
       usedCapital,

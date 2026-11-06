@@ -458,3 +458,35 @@ test("simultaneous equal-ranked entries use stable symbol order, not input order
     ), true);
   }
 });
+
+test("closed-trade funding is booked at its settlement time before an earlier loss batch", () => {
+  const winningShort = [
+    { openTime: 0, closeTime: 9, open: 102, high: 103, low: 99, close: 100 },
+    { openTime: 10, closeTime: 19, open: 100, high: 101, low: 99, close: 100 },
+    { openTime: 20, closeTime: 29, open: 100, high: 101, low: 97, close: 98 }
+  ];
+  const losingLong = [
+    { openTime: 0, closeTime: 9, open: 98, high: 101, low: 97, close: 100 },
+    { openTime: 10, closeTime: 19, open: 100, high: 101, low: 97, close: 99 },
+    { openTime: 20, closeTime: 29, open: 99, high: 100, low: 98, close: 99 }
+  ];
+  const result = simulatePortfolio([
+    {
+      symbol: "A_FUNDING_SHORTUSDT", timeframe: "1h", direction: "SHORT",
+      distanceRate: 0.1, candles: winningShort, signalIndex: 0, config,
+      fundingEvents: [{ fundingTime: 15, rate: 0.02, markPrice: 100 }]
+    },
+    {
+      symbol: "B_LOSING_LONGUSDT", timeframe: "1h", direction: "LONG",
+      distanceRate: 0.1, candles: losingLong, signalIndex: 0, config
+    }
+  ], { initialCapital: 1_000 });
+
+  const funding = result.capital.events.find(event => event.type === "closed_position_funding");
+  const replenishment = result.capital.events.find(event => event.type === "loss_replenishment");
+  assert.equal(funding.time, 15);
+  assert.equal(replenishment.time, 19);
+  assert.ok(funding.time < replenishment.time);
+  assert.equal(replenishment.topUp, 100);
+  assert.equal(result.capital.accountBalance, 1_110);
+});

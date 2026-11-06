@@ -137,8 +137,15 @@ async function run(){
   },timeframeSettings:Object.fromEntries(s.timeframes.map(tf=>[tf,{maxBodyPercent:s.bodyThresholds[tf]??null}]))},{
    onSignal:addLiveSignal,
    onProgress:p=>{
-    if(p.phase==="series-scan")$("scannedCount").textContent=String(p.symbolTimeframeSeries);
-    if(p.phase==="signal-scan")$("scannedCount").textContent=String(p.symbolTimeframeSeries);
+    if(p.phase==="series-scan"||p.phase==="signal-scan"){
+     $("scannedCount").textContent=String(p.symbolTimeframeSeries);
+     $("signalCount").textContent=String(p.signalsFound);
+    }
+    if(p.phase==="portfolio-progress"){
+     $("closedCount").textContent=String(p.closedTrades);
+     $("openCount").textContent=String(p.openTrades);
+     $("status").textContent="已扫描 "+p.symbolTimeframeSeries+" 组序列；当前已发现信号的阶段模拟："+p.closedTrades+" 笔已平仓、"+p.openTrades+" 笔未平仓（暂定，后续周期加入后会重新计算）。";
+    }
    }
   });
   const closed=result.accepted.filter(t=>t.status==="closed").length;

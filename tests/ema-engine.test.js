@@ -14,7 +14,7 @@ function risingHistory() {
 }
 
 function fallingHistory() {
-  return Array.from({ length: 100 }, (_, i) => {
+  return Array.from({ length: EMA_WARMUP_BARS }, (_, i) => {
     const close = 120 - i * 0.1;
     return makeCandle(i * 60_000, close + 0.02, close + 0.03, close - 0.03, close);
   });
@@ -30,7 +30,7 @@ test("EMA uses SMA seed and recursive smoothing", () => {
 });
 
 test("insufficient candles do not create a signal", () => {
-  const result = analyzeLatestClosedSignal([]);
+  const result = analyzeLatestClosedSignal(Array.from({ length: 501 }, (_, i) => makeCandle(i * 60_000, 100, 101, 99, 100)));
   assert.equal(result.signal, null);
   assert.equal(result.reason, "not_enough_candles");
 });
@@ -75,8 +75,8 @@ test("only the latest completed candle can signal; a later completed candle expi
   const e100 = calculateEMA(closes, 100).at(-1);
   const open = e100 - 1;
   const close = Math.max(e25, e50, e100) + 1;
-  candles.push(makeCandle(6_000_000, open, close + 0.1, open - 0.1, close));
-  candles.push(makeCandle(6_060_000, close, close + 0.2, close - 0.2, close + 0.1));
+  candles.push(makeCandle(30_000_000, open, close + 0.1, open - 0.1, close));
+  candles.push(makeCandle(30_060_000, close, close + 0.2, close - 0.2, close + 0.1));
   assert.equal(analyzeLatestClosedSignal(candles).signal?.direction, "LONG");
   candles.push(makeCandle(30_120_000, close + 0.1, close + 0.3, close, close + 0.2));
   assert.equal(analyzeLatestClosedSignal(candles).signal, null);

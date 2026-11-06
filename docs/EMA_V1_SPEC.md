@@ -108,6 +108,7 @@ Backtest must avoid look-ahead bias. Signal-close entry must be modeled as execu
 - Take profit is modeled as a limit order and counts as filled only when market price reaches the limit.
 - Stop loss is modeled as a market exit.
 - Optional timeout close after 1–9 K-lines. The selected number applies to every timeframe as a candle count, not a fixed wall-clock duration.
+- Count begins with the first complete candle after actual entry. If neither TP nor SL has triggered, close at the close price of the Nth counted candle, modeled as a market exit with configured slippage.
 
 ## 9. Capital and position sizing
 
@@ -174,7 +175,6 @@ Fees, slippage, and funding-fee assumptions must be configurable and saved. Thei
 ## 14. Items requiring user confirmation before backtest implementation
 
 
-1. What exact timeout exit price should be used: close of the Nth candle after entry, or another execution convention? The candle-count start point must also be defined.
 2. What are the default fee, slippage, and funding assumptions? Prefer editable fields, with transparent defaults.
 3. What integer range should be allowed for hard-stop percentage?
 4. For the auxiliary stop, confirm whether the user selects either option 1 or option 2 (not both simultaneously).

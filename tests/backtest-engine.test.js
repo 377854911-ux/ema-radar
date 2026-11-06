@@ -95,19 +95,19 @@ test("timeout counts complete candles after entry", () => {
 test("funding is direction-aware and missing funding marks trade incomplete", () => {
   const data = [
     { openTime: 0, closeTime: 9, open: 98, high: 101, low: 97, close: 100 },
-    { openTime: 10, closeTime: 19, open: 100, high: 103, low: 99, close: 102 },
-    { openTime: 20, closeTime: 29, open: 102, high: 103, low: 101, close: 102 }
+    { openTime: 10, closeTime: 19, open: 100, high: 101, low: 99, close: 100 },
+    { openTime: 20, closeTime: 29, open: 100, high: 103, low: 99, close: 102 }
   ];
   const long = simulateTrade({
     candles: data, signalIndex: 0, direction: "LONG",
     config: { ...base, rr: 1 },
-    fundingEvents: [{ fundingTime: 15, rate: 0.001 }]
+    fundingEvents: [{ fundingTime: 15, rate: 0.001, markPrice: 100 }]
   });
   assert.equal(long.fundingPnl, -0.5);
   const missing = simulateTrade({
     candles: data, signalIndex: 0, direction: "LONG",
     config: { ...base, rr: 1 },
-    fundingEvents: [{ fundingTime: 15, rate: null }]
+    fundingEvents: [{ fundingTime: 15, rate: null, markPrice: 100 }]
   });
   assert.equal(missing.status, "incomplete");
   assert.equal(missing.netPnl, null);

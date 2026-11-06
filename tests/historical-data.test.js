@@ -1,8 +1,36 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { buildDailyUniverse, normalizeKline, fetchBacktestDataset, EMA_WARMUP_BARS, fetchFundingHistory, fetchKlinesRange, createHistoricalCache } from "../js/historical-data.js";
+import { buildDailyUniverse, normalizeKline, fetchBacktestDataset, EMA_WARMUP_BARS, fetchFundingHistory, fetchKlinesRange, createHistoricalCache, fetchCurrentUsdtPerpetualSymbols } from "../js/historical-data.js";
 import { runHistoricalBacktest, createBacktestRange, BACKTEST_PERIOD_DAYS } from "../js/historical-backtest.js";
 import { calculateEMA } from "../js/ema-engine.js";
+
+test("historical exchange metadata requests retry rate limits and validate the response", async () => {
+  let calls = 0;
+  const symbols = await fetchCurrentUsdtPerpetualSymbols(async () => {
+    calls += 1;
+    if (calls === 1) {
+      return { ok: false, status: 429, headers: { get: () => "0" } };
+    }
+    return {
+      ok: true,
+      json: async () => ({
+        symbols: [
+          { symbol: "BTCUSDT", status: "TRADING", contractType: "PERPETUAL", quoteAsset: "USDT" },
+          { symbol: "BTCUSD_PERP", status: "TRADING", contractType: "PERPETUAL", quoteAsset: "USD" },
+          { symbol: "OLDUSDT", status: "SETTLING", contractType: "PERPETUAL", quoteAsset: "USDT" }
+        ]
+      })
+    };
+  });
+  assert.equal(calls, 2);
+  assert.deepEqual(symbols, ["BTCUSDT"]);
+  await assert.rejects(
+    () => fetchCurrentUsdtPerpetualSymbols(async () => ({
+      ok: true, json: async () => ({ code: -1, msg: "missing symbols array" })
+    })),
+    /invalid exchangeInfo response/
+  );
+});
 
 test("historical cache falls back to page memory when IndexedDB is unavailable", async () => {
   const cache = createHistoricalCache(null);

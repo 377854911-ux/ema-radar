@@ -205,6 +205,22 @@ test("open positions crossing a standard funding time require that settlement re
   assert.equal(result.fundingPnl, null);
 });
 
+test("funding exactly at an open position's final mark is ambiguous", () => {
+  const eightHours = 8 * 60 * 60 * 1000;
+  const data = [
+    { openTime: 0, closeTime: 59_999, open: 98, high: 101, low: 97, close: 100 },
+    { openTime: 60_000, closeTime: eightHours - 1, open: 100, high: 101, low: 99, close: 100 },
+    { openTime: eightHours, closeTime: eightHours, open: 100, high: 101, low: 99, close: 100.5 }
+  ];
+  const result = simulateTrade({
+    candles: data, signalIndex: 0, direction: "LONG", config: base,
+    fundingEvents: [{ fundingTime: eightHours, rate: 0.001, markPrice: 100 }]
+  });
+  assert.equal(result.status, "open");
+  assert.equal(result.fundingComplete, false);
+  assert.equal(result.fundingPnl, null);
+});
+
 test("summary excludes incomplete trades from headline statistics", () => {
   const summary = summarizeBacktest([
     { status: "closed", netPnl: 20, exitReason: "take_profit" },

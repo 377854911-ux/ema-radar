@@ -79,8 +79,9 @@ function findSignalsForSeries({ symbol, timeframe, rawCandles, dataset, settings
     if (!Number.isFinite(timestamp)
         || timestamp < dataset.startTime || timestamp >= dataset.endTime) continue;
 
-    const day = dayStart(timestamp);
-    const dailyRows = dataset.dailyUniverse[String(day)] ?? dataset.dailyUniverse[day] ?? [];
+    // A day's eligible universe is known only after the preceding UTC day closes.
+    const universeDay = dayStart(timestamp) - DAY_MS;
+    const dailyRows = dataset.dailyUniverse[String(universeDay)] ?? dataset.dailyUniverse[universeDay] ?? [];
     if (!dailyRows.some(row => row.symbol === symbol)) continue;
     if (!validCandle(signalCandle) || !validCandle(nextCandle)) continue;
 

@@ -211,7 +211,7 @@ test("funding settlement exactly at entry or exit timestamp is marked ambiguous"
 test("long stop gap fills at the worse candle open, not the stop trigger", () => {
   const data = [
     { openTime: 0, closeTime: 9, open: 98, high: 101, low: 97, close: 100 },
-    { openTime: 10, closeTime: 19, open: 95, high: 97, low: 94, close: 96 },
+    { openTime: 10, closeTime: 19, open: 95, high: 103, low: 94, close: 96 },
     { openTime: 20, closeTime: 29, open: 96, high: 97, low: 95, close: 96 }
   ];
   const result = simulateTrade({
@@ -226,7 +226,7 @@ test("long stop gap fills at the worse candle open, not the stop trigger", () =>
 test("short stop gap fills at the worse candle open, not the stop trigger", () => {
   const data = [
     { openTime: 0, closeTime: 9, open: 100, high: 103, low: 99, close: 98 },
-    { openTime: 10, closeTime: 19, open: 102, high: 103, low: 101, close: 102.5 },
+    { openTime: 10, closeTime: 19, open: 102, high: 103, low: 95, close: 102.5 },
     { openTime: 20, closeTime: 29, open: 102.5, high: 103, low: 102, close: 102.5 }
   ];
   const result = simulateTrade({

@@ -23,6 +23,20 @@ test("backtest page persists its own settings separately from scanner settings",
 });
 
 
+test("both pages handle unavailable storage and sanitize restored timeframe settings", () => {
+  const scanner = readFileSync(new URL("../index.html", import.meta.url), "utf8");
+  const backtest = readFileSync(new URL("../backtest.html", import.meta.url), "utf8");
+  assert.match(scanner, /try\s*\{[\s\S]*?localStorage\.setItem\(STORAGE_KEY/);
+  assert.match(scanner, /catch\s*\{[\s\S]*?保存失败/);
+  assert.match(scanner, /Array\.isArray\(saved\.timeframes\)/);
+  assert.match(scanner, /SUPPORTED_TIMEFRAMES\.includes\(tf\)/);
+  assert.match(backtest, /try\s*\{[\s\S]*?localStorage\.setItem\(KEY/);
+  assert.match(backtest, /catch\s*\{[\s\S]*?保存失败/);
+  assert.match(backtest, /Array\.isArray\(saved\.timeframes\)/);
+  assert.match(backtest, /TFS\.includes\(tf\)/);
+  assert.match(backtest, /!Array\.isArray\(saved\.bodyThresholds\)/);
+});
+
 test("live scanner and historical backtest expose the same saved funding thresholds", () => {
   const scanner = readFileSync(new URL("../index.html", import.meta.url), "utf8");
   const backtest = readFileSync(new URL("../backtest.html", import.meta.url), "utf8");

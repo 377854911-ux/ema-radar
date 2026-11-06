@@ -160,9 +160,15 @@ export function simulateTrade({ candles, signalIndex, direction, config, funding
     const stopGappedAtOpen = stopLevels.some(level =>
       direction === "LONG" ? c.open <= level : c.open >= level
     );
+    // A take-profit crossed by the candle open is reached before any later
+    // intrabar movement. A limit TP receives the favorable opening price.
+    const takeProfitGappedAtOpen = direction === "LONG"
+      ? c.open >= takeProfit
+      : c.open <= takeProfit;
 
     const targetCanBeEvaluated = !(config.entryMethod === "retracement_limit" && i === entryIndex);
-    if (stopTouched && tpTouched && targetCanBeEvaluated && !stopGappedAtOpen) {
+    if (stopTouched && tpTouched && targetCanBeEvaluated
+        && !stopGappedAtOpen && !takeProfitGappedAtOpen) {
       // OHLC data cannot reveal which level was reached first. Per user rule,
       // offset the gross outcome to zero; entry/exit fees and funding still apply.
       exit = {
@@ -188,7 +194,12 @@ export function simulateTrade({ candles, signalIndex, direction, config, funding
       break;
     }
     if (tpTouched && targetCanBeEvaluated) {
-      exit = { index: i, reason: "take_profit", rawPrice: takeProfit, price: takeProfit, time: c.closeTime ?? c.openTime };
+      const takeProfitFill = takeProfitGappedAtOpen ? c.open : takeProfit;
+      exit = {
+        index: i, reason: "take_profit",
+        rawPrice: takeProfitFill, price: takeProfitFill,
+        time: c.closeTime ?? c.openTime
+      };
       break;
     }
 

@@ -491,3 +491,29 @@ test("closed-trade funding is booked at its settlement time before an earlier lo
   assert.equal(replenishment.topUp, 100);
   assert.equal(result.capital.accountBalance, 1_110);
 });
+
+test("funding settlements across symbols are applied in global timestamp order", () => {
+  const openCandles = [
+    { openTime: 0, closeTime: 9, open: 98, high: 101, low: 97, close: 100 },
+    { openTime: 10, closeTime: 19, open: 100, high: 101, low: 99, close: 100 },
+    { openTime: 20, closeTime: 29, open: 100, high: 101, low: 99, close: 100 }
+  ];
+  const result = simulatePortfolio([
+    {
+      symbol: "A_LATERUSDT", timeframe: "1h", direction: "LONG",
+      distanceRate: 0.1, candles: openCandles, signalIndex: 0, config,
+      fundingEvents: [{ fundingTime: 25, rate: -0.02, markPrice: 100 }]
+    },
+    {
+      symbol: "Z_EARLIERUSDT", timeframe: "1h", direction: "LONG",
+      distanceRate: 0.1, candles: openCandles, signalIndex: 0, config,
+      fundingEvents: [{ fundingTime: 15, rate: 0.02, markPrice: 100 }]
+    }
+  ]);
+  const settlements = result.capital.events.filter(event =>
+    event.type === "open_position_funding"
+  );
+  assert.deepEqual(settlements.map(event => event.time), [15, 25]);
+  assert.deepEqual(settlements.map(event => event.symbol), ["Z_EARLIERUSDT", "A_LATERUSDT"]);
+  assert.equal(result.capital.accountBalance, 10_000);
+});

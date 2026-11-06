@@ -4,14 +4,29 @@ import { isFundingRateAllowed } from "./funding-filter.js";
 const API_BASE = "https://fapi.binance.com";
 export const SUPPORTED_TIMEFRAMES = Object.freeze(Object.keys(TIMEFRAME_MINUTES));
 
-async function getJSON(url) {
-  const response = await fetch(url, { headers: { Accept: "application/json" } });
-  if (!response.ok) {
-    const error = new Error(`Binance API ${response.status}`);
-    error.status = response.status;
-    throw error;
+async function getJSON(url, retries = 3) {
+  let lastError;
+  for (let attempt = 0; attempt < retries; attempt++) {
+    try {
+      const response = await fetch(url, { headers: { Accept: "application/json" } });
+      if (response.ok) return await response.json();
+      const error = new Error(`Binance API ${response.status}`);
+      error.status = response.status;
+      if (response.status !== 429 && response.status < 500) throw error;
+      lastError = error;
+      if (attempt === retries - 1) throw error;
+      const retryAfterSeconds = Number(response.headers?.get?.("Retry-After"));
+      const retryDelay = Number.isFinite(retryAfterSeconds) && retryAfterSeconds > 0
+        ? retryAfterSeconds * 1000 : 500 * (attempt + 1);
+      await new Promise(resolve => setTimeout(resolve, retryDelay));
+    } catch (error) {
+      if (error.status && error.status !== 429 && error.status < 500) throw error;
+      lastError = error;
+      if (attempt === retries - 1) throw lastError;
+      await new Promise(resolve => setTimeout(resolve, 500 * (attempt + 1)));
+    }
   }
-  return response.json();
+  throw lastError;
 }
 
 /**

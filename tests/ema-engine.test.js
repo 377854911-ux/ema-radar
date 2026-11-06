@@ -82,6 +82,16 @@ test("only the latest completed candle can signal; a later completed candle expi
   assert.equal(analyzeLatestClosedSignal(candles).signal, null);
 });
 
+test("live scanner rejects a gap anywhere in the 500-bar EMA warm-up window", () => {
+  const candles = Array.from({ length: EMA_WARMUP_BARS + 2 }, (_, i) => {
+    const openTime = i * 900_000 + (i >= 300 ? 900_000 : 0);
+    return makeCandle(openTime, 100, 101, 99, 100, openTime + 899_999);
+  });
+  const result = analyzeLatestClosedSignal(candles, { timeframe: "15m" });
+  assert.equal(result.signal, null);
+  assert.equal(result.reason, "insufficient_contiguous_candles");
+});
+
 test("same symbol always keeps its shortest qualifying timeframe before ranking", () => {
   const ranked = rankAndDeduplicateSignals([
     { symbol: "AAAUSDT", direction: "LONG", timeframe: "1h", distanceRate: 0.01 },

@@ -33,6 +33,37 @@ test("excludes daily moves strictly beyond plus or minus 30 percent", () => {
   assert.deepEqual(result[day].map(x => x.symbol), ["EDGEUSDT"]);
 });
 
+test("retains a UTC day key when all daily symbols are excluded by the 30 percent filter", () => {
+  const day = 1_800_000_000_000;
+  const result = buildDailyUniverse({
+    UPUSDT: [{ openTime: day, open: 100, close: 140, quoteVolume: 1000 }],
+    DOWNUSDT: [{ openTime: day, open: 100, close: 60, quoteVolume: 900 }]
+  }, { startTime: day, endTime: day + 86_400_000 });
+  assert.deepEqual(result[day], []);
+});
+
+test("reports missing daily universe dates instead of silently treating them as no signals", async () => {
+  const startTime = 1_800_000_000_000;
+  const endTime = startTime + 86_400_000;
+  const priorDay = Math.floor(startTime / 86_400_000) * 86_400_000 - 86_400_000;
+  const result = await fetchBacktestDataset({
+    startTime, endTime, timeframes: ["15m"], concurrency: 1,
+    fetchImpl: async input => {
+      const url = new URL(input);
+      let data = [];
+      if (url.pathname.endsWith("/exchangeInfo")) {
+        data = [{ symbol: "TESTUSDT", status: "TRADING", contractType: "PERPETUAL", quoteAsset: "USDT" }];
+      } else if (url.pathname.endsWith("/klines") && url.searchParams.get("interval") === "1d") {
+        data = [[priorDay, "100", "105", "99", "104", "10", startTime - 1, "2000"]];
+      }
+      return { ok: true, json: async () => data };
+    }
+  });
+  assert.deepEqual(result.missingUniverseDays, [startTime]);
+  assert.equal(result.expectedUniverseDays, 2);
+  assert.ok(result.limitations.some(item => item.includes("daily-universe data is missing")));
+});
+
 test("downloads enough pre-period candles to warm up EMA100", async () => {
   const startTime = 1_800_000_000_000;
   const endTime = startTime + 86_400_000;

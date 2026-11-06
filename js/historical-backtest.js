@@ -62,7 +62,7 @@ function splitContiguousCandles(rawCandles, timeframe) {
  * Calculate each EMA series once, then inspect candles in linear time.
  * Values at index i only depend on closes up to i, so no future data leaks in.
  */
-function findSignalsForSeries({ symbol, timeframe, rawCandles, dataset, settings, tradeConfig }) {
+function findSignalsForSeries({ symbol, timeframe, rawCandles, dataset, settings, tradeConfig, onSignal }) {
   const candles = rawCandles.map(readCandle);
   if (candles.length < 102) return [];
   const closes = candles.map(c => c.close);
@@ -110,7 +110,7 @@ function findSignalsForSeries({ symbol, timeframe, rawCandles, dataset, settings
 
     const distanceRate = (Math.max(...values) - Math.min(...values))
       / signalCandle.close * 100;
-    signals.push({
+    const signal = {
       symbol,
       timeframe,
       direction,
@@ -118,7 +118,9 @@ function findSignalsForSeries({ symbol, timeframe, rawCandles, dataset, settings
       candles: rawCandles,
       signalIndex: i,
       config: tradeConfig
-    });
+    };
+    signals.push(signal);
+    onSignal?.({ symbol, timeframe, direction, signalTime: timestamp, signalIndex: i });
   }
   return signals;
 }
@@ -207,7 +209,8 @@ export function runHistoricalBacktest(dataset, config = {}, options = {}) {
           continue;
         }
         const found = findSignalsForSeries({
-          symbol, timeframe, rawCandles: segment, dataset, settings, tradeConfig
+          symbol, timeframe, rawCandles: segment, dataset, settings, tradeConfig,
+          onSignal: options.onSignal
         });
         candidates.push(...found);
         timeframeSignals += found.length;

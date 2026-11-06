@@ -1,4 +1,5 @@
 import { analyzeLatestClosedSignal, rankAndDeduplicateSignals, TIMEFRAME_MINUTES } from "./ema-engine.js";
+import { isFundingRateAllowed } from "./funding-filter.js";
 
 const API_BASE = "https://fapi.binance.com";
 export const SUPPORTED_TIMEFRAMES = Object.freeze(Object.keys(TIMEFRAME_MINUTES));
@@ -50,6 +51,15 @@ export async function getTop100UsdtPerpetual() {
     .slice(0, 100);
 }
 
+export async function getFundingRateMap(symbols) {
+  const rows = await getJSON(`${API_BASE}/fapi/v1/premiumIndex`);
+  const wanted = new Set(symbols.map(item => item.symbol ?? item));
+  return new Map((Array.isArray(rows) ? rows : [rows])
+    .filter(row => wanted.has(row.symbol))
+    .map(row => [row.symbol, Number.isFinite(Number(row.lastFundingRate))
+      ? Number(row.lastFundingRate) : null]));
+}
+
 export async function getKlines(symbol, interval, limit = 120) {
   if (!SUPPORTED_TIMEFRAMES.includes(interval)) {
     throw new RangeError(`Unsupported Binance timeframe: ${interval}`);
@@ -85,25 +95,47 @@ export async function scanMarket({
   symbols,
   timeframes,
   bodyThresholds = {},
+  fundingFilterPct = 0,
   concurrency = 6,
   onProgress = () => {}
 }) {
   const validTimeframes = [...new Set(timeframes)].filter(tf => SUPPORTED_TIMEFRAMES.includes(tf));
+  const thresholdPct = Number(fundingFilterPct ?? 0);
+  if (!Number.isFinite(thresholdPct) || thresholdPct < 0) {
+    throw new RangeError("fundingFilterPct must be a non-negative percentage");
+  }
+  const fundingRates = thresholdPct > 0 ? await getFundingRateMap(symbols) : new Map();
   const tasks = symbols.flatMap(symbol =>
     validTimeframes.map(timeframe => ({ symbol, timeframe }))
   );
   let completed = 0;
   let failures = 0;
+  let fundingFiltered = 0;
+  let fundingUnavailable = 0;
   const results = await mapWithConcurrency(tasks, concurrency, async task => {
     try {
-      const candles = await getKlines(task.symbol.symbol ?? task.symbol, task.timeframe, 120);
+      const symbol = task.symbol.symbol ?? task.symbol;
+      if (thresholdPct > 0) {
+        const rate = fundingRates.get(symbol);
+        if (rate === undefined || rate === null || !Number.isFinite(rate)) {
+          fundingUnavailable++;
+          return null;
+        }
+        if (!isFundingRateAllowed(rate, thresholdPct)) {
+          fundingFiltered++;
+          return null;
+        }
+      }
+      const candles = await getKlines(symbol, task.timeframe, 120);
       const { signal } = analyzeLatestClosedSignal(candles, {
         timeframe: task.timeframe,
         maxBodyPercent: bodyThresholds[task.timeframe]
       });
       return signal ? {
         ...signal,
-        symbol: task.symbol.symbol ?? task.symbol,
+        symbol,
+        fundingRate: thresholdPct > 0 ? fundingRates.get(symbol) : null,
+        fundingRatePct: thresholdPct > 0 ? fundingRates.get(symbol) * 100 : null,
         quoteVolume: task.symbol.quoteVolume ?? null,
         priceChangePercent: task.symbol.priceChangePercent ?? null
       } : null;
@@ -122,6 +154,8 @@ export async function scanMarket({
     short: signals.filter(item => item.direction === "SHORT"),
     scanned: completed,
     total: tasks.length,
-    failures
+    failures,
+    fundingFiltered,
+    fundingUnavailable
   };
 }

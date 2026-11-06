@@ -173,4 +173,25 @@ test("realized net profit, fee deductions, funding and account balance reconcile
   assert.ok(Math.abs(result.capital.accountBalance - (result.initialCapital + trade.netPnl)) < 1e-9);
   assert.equal(result.capital.usedCapital, 0);
   assert.ok(Math.abs(result.capital.availableBalance - result.capital.accountBalance) < 1e-9);
+  // Entry fee is a real cash outflow at entry, so it contributes to drawdown
+  // before the later profitable settlement.
+  assert.ok(Math.abs(result.summary.maxDrawdownPct - 0.005) < 1e-9);
+});
+
+
+test("drawdown is unknown when a funding-incomplete trade breaks cash accounting", () => {
+  const candles = longCandles();
+  const result = simulatePortfolio([{
+    symbol: "UNKNOWNFUNDINGUSDT",
+    timeframe: "1h",
+    direction: "LONG",
+    distanceRate: 0.1,
+    candles,
+    signalIndex: 0,
+    config: { ...config, entryFeeRate: 0.1 },
+    fundingEvents: [{ fundingTime: 10, rate: 0.001, markPrice: 100 }]
+  }]);
+  assert.equal(result.accepted[0].status, "incomplete");
+  assert.equal(result.capital.capitalAccountingComplete, false);
+  assert.equal(result.summary.maxDrawdownPct, null);
 });

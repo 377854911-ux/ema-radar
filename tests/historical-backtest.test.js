@@ -129,13 +129,14 @@ test("per-timeframe body threshold can reject an otherwise valid signal", async 
   assert.equal(result.scanStats.signalsFound, 0);
 });
 
-test("rolling period helper only accepts the supported 7/30/60 day periods", async () => {
+test("rolling period helper accepts the supported 7/30/60/90 day periods", async () => {
   const range = createBacktestRange(7, 10 * 86_400_000 + 1234);
   assert.deepEqual(range, {
     startTime: 3 * 86_400_000,
     endTime: 10 * 86_400_000
   });
-  assert.throws(() => createBacktestRange(14), /7, 30, or 60/);
+  assert.equal(createBacktestRange(90, 100 * 86_400_000).endTime - createBacktestRange(90, 100 * 86_400_000).startTime, 90 * 86_400_000);
+  assert.throws(() => createBacktestRange(14), /7, 30, 60, or 90/);
 });
 
 test("does not carry EMA signals or trades across missing candle intervals", async () => {

@@ -161,8 +161,9 @@ function readSettingsFromUI() {
 function saveSettings() {
   readSettingsFromUI();
   const fundingPct = Number(settings.fundingFilterPct);
-  if (!Number.isFinite(fundingPct) || fundingPct < 0) {
-    setStatus("资金费率阈值必须是大于或等于0的数字。");
+  if (!Number.isFinite(fundingPct) || fundingPct < 0
+      || ($("fundingFilterPct").value === "custom" && fundingPct <= 0)) {
+    $("saveStatus").textContent = "自定义资金费率阈值必须是大于0的数字。";
     return;
   }
   localStorage.setItem(STORAGE_KEY, JSON.stringify(settings));
@@ -189,6 +190,12 @@ function renderSignals(target, countTarget, items, direction) {
 async function scanNow() {
   if (scanning) return;
   readSettingsFromUI();
+  const fundingPct = Number(settings.fundingFilterPct);
+  if (!Number.isFinite(fundingPct) || fundingPct < 0
+      || ($("fundingFilterPct").value === "custom" && fundingPct <= 0)) {
+    setStatus("请填写大于0的自定义资金费率阈值。");
+    return;
+  }
   if (!settings.timeframes.length) {
     setStatus("请至少选择一个扫描周期。");
     return;
@@ -219,7 +226,7 @@ async function scanNow() {
     lastSignalKeys = freshKeys;
     renderSignals("longResults","longCount",result.long,"LONG");
     renderSignals("shortResults","shortCount",result.short,"SHORT");
-    setStatus("完成：" + result.scanned + "/" + result.total + " 组扫描 · " + symbols.length + " 个合约 · " + result.failures + " 次请求失败 · 新信号 " + newCount + " 个 · " + new Date().toLocaleTimeString());
+    setStatus("完成：" + result.scanned + "/" + result.total + " 组扫描 · " + symbols.length + " 个合约 · " + result.failures + " 次请求失败 · 高费率过滤 " + result.fundingFiltered + " · 费率缺失 " + result.fundingUnavailable + " · 新信号 " + newCount + " 个 · " + new Date().toLocaleTimeString());
   } catch (error) {
     setStatus("扫描失败：" + (error?.message || "网络错误") + "。请稍后重试。");
   } finally {

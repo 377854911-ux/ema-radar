@@ -159,3 +159,27 @@ test("ambiguous trades are excluded from win rate denominator but fees remain in
   assert.equal(summary.takeProfitCount, 1);
   assert.equal(summary.stopLossCount, 1);
 });
+
+
+test("funding settlement exactly at entry or exit timestamp is marked ambiguous", () => {
+  const data = [
+    { openTime: 0, closeTime: 9, open: 98, high: 101, low: 97, close: 100 },
+    { openTime: 10, closeTime: 19, open: 100, high: 101, low: 99, close: 100 },
+    { openTime: 20, closeTime: 29, open: 100, high: 103, low: 99, close: 102 }
+  ];
+  const atEntry = simulateTrade({
+    candles: data, signalIndex: 0, direction: "LONG",
+    config: { ...base, rr: 1 },
+    fundingEvents: [{ fundingTime: 10, rate: 0.001, markPrice: 100 }]
+  });
+  assert.equal(atEntry.status, "incomplete");
+  assert.equal(atEntry.reason, "missing_or_ambiguous_funding_data");
+
+  const atExit = simulateTrade({
+    candles: data, signalIndex: 0, direction: "LONG",
+    config: { ...base, rr: 1 },
+    fundingEvents: [{ fundingTime: 29, rate: 0.001, markPrice: 100 }]
+  });
+  assert.equal(atExit.status, "incomplete");
+  assert.equal(atExit.reason, "missing_or_ambiguous_funding_data");
+});

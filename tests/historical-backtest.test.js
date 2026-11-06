@@ -205,7 +205,7 @@ test("a position left unresolved by a candle gap is incomplete, not an end-of-te
   assert.equal(result.accepted[0].reason, "incomplete_candle_history_after_entry");
   assert.equal(result.report.openTrades, 0);
   assert.equal(result.report.incompleteTrades, 1);
-  assert.ok(result.capitalEvents.some(event => event.type === "open_position_data_incomplete"));
+  assert.ok(result.capital.events.some(event => event.type === "open_position_data_incomplete"));
 });
 
 test("reports positions that remain open at the end of the backtest window", async () => {

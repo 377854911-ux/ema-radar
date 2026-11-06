@@ -1,7 +1,8 @@
 /**
  * Historical Binance USDⓈ-M public-data loader.
  *
- * Daily universe reconstruction uses UTC 1d klines:
+ * Daily universe reconstruction uses completed UTC 1d klines from the
+ * preceding day to determine the eligible universe for each backtest day:
  * - quote asset volume (kline field 7) as daily turnover
  * - daily open-to-close return as a documented proxy for the historical
  *   24-hour price-change filter
@@ -205,10 +206,12 @@ export async function buildHistoricalTop100({
   fetchImpl = fetch, onProgress = () => {}
 }) {
   const list = symbols || await fetchCurrentUsdtPerpetualSymbols(fetchImpl);
+  // The first backtest day must use the previous, already completed UTC day.
+  const universeStartTime = Math.floor(startTime / DAY) * DAY - DAY;
   let completed = 0;
   const entries = await mapLimit(list, concurrency, async symbol => {
     const candles = await fetchKlinesRange({
-      symbol, interval: "1d", startTime, endTime, cache, fetchImpl
+      symbol, interval: "1d", startTime: universeStartTime, endTime, cache, fetchImpl
     });
     completed++;
     onProgress({ completed, total: list.length, symbol });
@@ -216,7 +219,9 @@ export async function buildHistoricalTop100({
   });
   const dailyCandlesBySymbol = Object.fromEntries(entries);
   return {
-    dailyUniverse: buildDailyUniverse(dailyCandlesBySymbol, { startTime, endTime, limit: 100 }),
+    dailyUniverse: buildDailyUniverse(dailyCandlesBySymbol, {
+      startTime: universeStartTime, endTime, limit: 100
+    }),
     symbolsChecked: list.length,
     limitations: [
       "Universe starts from contracts that are currently active; delisted historical contracts are not reconstructed.",
@@ -270,8 +275,9 @@ const INTERVAL_MS = Object.freeze({
 
 /**
  * Downloads/caches the candle and funding inputs needed by the backtest.
- * The daily universe is reconstructed first; intraday data is then fetched
- * only for symbols that appear in at least one historical daily top-100 list.
+ * The daily universe is reconstructed first, including one completed UTC day
+ * before the backtest range; intraday data is then fetched only for symbols
+ * that appear in at least one applicable historical top-100 list.
  */
 export async function fetchBacktestDataset({
   startTime, endTime, timeframes, concurrency = 4, cache = createHistoricalCache(),

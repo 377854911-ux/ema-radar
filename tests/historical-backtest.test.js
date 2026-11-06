@@ -251,3 +251,21 @@ test("historical funding filter rejects a signal when no prior settled rate is a
   assert.equal(result.scanStats.signalsFound, 0);
   assert.equal(result.scanStats.fundingRateUnavailableSignals, 1);
 });
+
+
+test("normalizes missing candle close times before signal-close execution", async () => {
+  const dataset = makeDataset();
+  for (const candle of dataset.candlesBySymbolTimeframe["TESTUSDT|15m"]) {
+    delete candle.closeTime;
+  }
+  const result = await runHistoricalBacktest(dataset, {
+    timeframes: ["15m"],
+    initialCapital: 10_000,
+    maxOpenTrades: 5,
+    tradeConfig: { ...tradeConfig, entryMethod: "signal_close" }
+  });
+  assert.equal(result.scanStats.signalsFound, 1);
+  assert.equal(result.accepted.length, 1);
+  assert.equal(result.accepted[0].entryTime, 106 * 900_000 - 1);
+  assert.equal(result.accepted[0].exitReason, "take_profit");
+});

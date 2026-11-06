@@ -107,3 +107,19 @@ test("rolling period helper only accepts the supported 7/30/60 day periods", () 
   });
   assert.throws(() => createBacktestRange(14), /7, 30, or 60/);
 });
+
+test("does not carry EMA signals or trades across missing candle intervals", () => {
+  const dataset = makeDataset();
+  for (let i = 106; i < dataset.candlesBySymbolTimeframe["TESTUSDT|15m"].length; i++) {
+    dataset.candlesBySymbolTimeframe["TESTUSDT|15m"][i].openTime += 900_000;
+    dataset.candlesBySymbolTimeframe["TESTUSDT|15m"][i].closeTime += 900_000;
+  }
+  const result = runHistoricalBacktest(dataset, {
+    timeframes: ["15m"],
+    initialCapital: 10_000,
+    maxOpenTrades: 5,
+    tradeConfig
+  });
+  assert.equal(result.scanStats.missingIntervals, 1);
+  assert.equal(result.scanStats.signalsFound, 0);
+});

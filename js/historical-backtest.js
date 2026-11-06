@@ -166,6 +166,11 @@ export function runHistoricalBacktest(dataset, config = {}, options = {}) {
 
   const selectedTimeframes = [...new Set(config.timeframes ?? dataset.timeframes ?? [])];
   if (!selectedTimeframes.length) throw new TypeError("Select at least one timeframe");
+  for (const timeframe of selectedTimeframes) {
+    if (!Object.hasOwn(TIMEFRAME_MINUTES, timeframe)) {
+      throw new RangeError(`Unsupported timeframe: ${timeframe}`);
+    }
+  }
   const candidates = [];
   const scanStats = {
     symbolTimeframeSeries: 0,

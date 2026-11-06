@@ -38,7 +38,8 @@ function readCandle(raw) {
 }
 
 function validCandle(c) {
-  return [c.open, c.high, c.low, c.close].every(Number.isFinite)
+  return [c.openTime, c.closeTime, c.open, c.high, c.low, c.close].every(Number.isFinite)
+    && c.closeTime >= c.openTime
     && c.open > 0 && c.low > 0
     && c.high >= Math.max(c.open, c.close)
     && c.low <= Math.min(c.open, c.close);
@@ -71,6 +72,12 @@ function findSignalsForSeries({
   fundingFilterPct = 0, onFundingFilter = () => {}
 }) {
   const candles = rawCandles.map(readCandle);
+  const intervalMs = TIMEFRAME_MINUTES[timeframe] * 60_000;
+  for (const candle of candles) {
+    if (candle.closeTime === null && Number.isFinite(candle.openTime)) {
+      candle.closeTime = candle.openTime + intervalMs - 1;
+    }
+  }
   if (candles.length < 102) return [];
   const closes = candles.map(c => c.close);
   const ema25 = calculateEMA(closes, 25);
@@ -140,7 +147,7 @@ function findSignalsForSeries({
       direction,
       distanceRate,
       fundingRateAtSignal,
-      candles: rawCandles,
+      candles,
       signalIndex: i,
       config: tradeConfig
     };

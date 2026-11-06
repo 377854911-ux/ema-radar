@@ -27,7 +27,7 @@ hr{border:0;border-top:1px solid #263a53;margin:14px 0}.progress{height:7px;back
 <section class="panel">
 <h2>回测范围</h2>
 <div class="row"><label for="period">回测周期</label><select id="period"><option value="7">最近 7 天</option><option value="30">最近 30 天</option><option value="60">最近 60 天</option></select></div>
-<div class="note">选择需要回测的周期，可多选；每个历史交易日都按当日成交额前100筛选。</div>
+<div class="note">选择需要回测的周期，可多选；每个历史交易日都按当日成交额前100筛选。</div><div class="note">首次下载历史数据会消耗较多流量。建议先选择一个周期完成测试，数据缓存后再增加周期；多周期与60天组合会明显增加下载量和耗时。</div>
 <div id="timeframes" class="grid">
 <label class="tf"><input type="checkbox" value="15m" checked>15m</label><label class="tf"><input type="checkbox" value="30m" >30m</label><label class="tf"><input type="checkbox" value="1h" >1h</label><label class="tf"><input type="checkbox" value="2h" >2h</label><label class="tf"><input type="checkbox" value="4h" >4h</label><label class="tf"><input type="checkbox" value="6h" >6h</label><label class="tf"><input type="checkbox" value="8h" >8h</label><label class="tf"><input type="checkbox" value="12h" >12h</label><label class="tf"><input type="checkbox" value="1d" >1d</label>
 </div>

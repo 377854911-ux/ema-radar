@@ -343,3 +343,23 @@ test("open position with funding at the uncertain entry timestamp makes cash acc
   assert.equal(result.capital.usedCapital, 500);
   assert.equal(result.summary.maxDrawdownPct, null);
 });
+
+
+test("same symbol and signal time with conflicting long and short directions rejects both regardless of input order", () => {
+  const bullish = longCandles();
+  const bearish = [
+    { openTime: 0, closeTime: 9, open: 102, high: 103, low: 99, close: 100 },
+    { openTime: 10, closeTime: 19, open: 100, high: 101, low: 97, close: 98 },
+    { openTime: 20, closeTime: 29, open: 98, high: 99, low: 97, close: 98 }
+  ];
+  const candidates = [
+    { symbol: "CONFLICTUSDT", timeframe: "1h", direction: "LONG", distanceRate: 0.01, candles: bullish, signalIndex: 0, config },
+    { symbol: "CONFLICTUSDT", timeframe: "15m", direction: "SHORT", distanceRate: 0.2, candles: bearish, signalIndex: 0, config }
+  ];
+  for (const ordered of [candidates, [...candidates].reverse()]) {
+    const result = simulatePortfolio(ordered);
+    assert.equal(result.accepted.length, 0);
+    assert.equal(result.skipped.length, 2);
+    assert.equal(result.skipped.every(item => item.reason === "conflicting_directions_same_signal_time"), true);
+  }
+});

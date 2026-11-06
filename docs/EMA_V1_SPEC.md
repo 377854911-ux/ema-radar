@@ -115,7 +115,7 @@ Backtest must avoid look-ahead bias. Signal-close entry must be modeled as execu
 - Position sizing is a user-configurable fixed amount.
 - Maximum five open trades simultaneously.
 - Display: total equity, used margin/capital committed, available balance, unrealized P&L, realized P&L, and cumulative replenishment/top-up capital.
-- Do not assume leverage, margin mode, or whether the fixed amount means notional value or margin allocated per trade until the user confirms it.
+- Fixed position amount means total notional position value (仓位总价值), not margin allocated per trade. Example: a 500 USDT setting means 500 USDT notional exposure; do not multiply by leverage. V1 backtest does not simulate leverage or leveraged margin.
 
 ## 10. Simulated replenishment after consecutive losses
 
@@ -173,11 +173,11 @@ Fees, slippage, and funding-fee assumptions must be configurable and saved. Thei
 
 ## 14. Items requiring user confirmation before backtest implementation
 
-1. Does the fixed position amount mean trade notional value, or margin allocated per trade? If margin, what leverage should be simulated?
-2. What exact timeout exit price should be used: close of the Nth candle after entry, or another execution convention? The candle-count start point must also be defined.
-3. What are the default fee, slippage, and funding assumptions? Prefer editable fields, with transparent defaults.
-4. What integer range should be allowed for hard-stop percentage?
-5. For the auxiliary stop, confirm whether the user selects either option 1 or option 2 (not both simultaneously).
-6. For a same-symbol opposite-direction signal while a position is open: wait until all positions close, then open only if a new fresh signal appears; never reuse an expired signal.
+
+1. What exact timeout exit price should be used: close of the Nth candle after entry, or another execution convention? The candle-count start point must also be defined.
+2. What are the default fee, slippage, and funding assumptions? Prefer editable fields, with transparent defaults.
+3. What integer range should be allowed for hard-stop percentage?
+4. For the auxiliary stop, confirm whether the user selects either option 1 or option 2 (not both simultaneously).
+5. For a same-symbol opposite-direction signal while a position is open: wait until all positions close, then open only if a new fresh signal appears; never reuse an expired signal.
 
 No implementation should silently invent answers to these unresolved items.

@@ -132,7 +132,7 @@ export function simulateTrade({ candles, signalIndex, direction, config, funding
   const takeProfit = direction === "LONG" ? entryPrice + riskDistance * rr : entryPrice - riskDistance * rr;
   if (takeProfit <= 0) return { status: "unclassifiable", reason: "invalid_take_profit" };
 
-  const entryTime = candles[entryIndex].openTime;
+  const entryTime = config.entryMethod === "signal_close"\n    ? (signal.closeTime ?? signal.openTime)\n    : candles[entryIndex].openTime;
   const entryFee = fee(notional, config.entryFeeRate);
   let exit = null;
   let countedBars = 0;
@@ -177,22 +177,35 @@ export function simulateTrade({ candles, signalIndex, direction, config, funding
   let fundingPnl = 0;
   for (const event of fundingEvents) {
     const time = num(event.fundingTime, "fundingTime");
-    if (time > entryTime && time <= exit.time) {
-      if (event.rate === null || event.rate === undefined || !Number.isFinite(Number(event.rate))) {
+    if (time >= entryTime && time <= exit.time) {
+      const entryBar = candles[entryIndex];
+      const exitBar = candles[exit.index];
+      const uncertainLimitEntry = config.entryMethod === "retracement_limit"
+        && time > entryBar.openTime && time <= (entryBar.closeTime ?? entryBar.openTime);
+      const uncertainIntrabarExit = exit.reason !== "timeout"
+        && time > exitBar.openTime && time <= (exitBar.closeTime ?? exitBar.openTime);
+      if (uncertainLimitEntry || uncertainIntrabarExit) {
+        fundingComplete = false;
+        continue;
+      }
+      if (event.rate === null || event.rate === undefined || !Number.isFinite(Number(event.rate))
+          || event.markPrice === null || event.markPrice === undefined || !(Number(event.markPrice) > 0)) {
         fundingComplete = false;
       } else {
         const rate = Number(event.rate);
+        const markPrice = Number(event.markPrice);
+        const positionValueAtFunding = notional * markPrice / entryPrice;
         // Positive funding: longs pay shorts; negative funding: shorts pay longs.
-        const payment = direction === "LONG" ? -notional * rate : notional * rate;
+        const payment = direction === "LONG" ? -positionValueAtFunding * rate : positionValueAtFunding * rate;
         fundingPnl += payment;
-        relevantFunding.push({ fundingTime: time, rate, amount: payment });
+        relevantFunding.push({ fundingTime: time, rate, markPrice, amount: payment });
       }
     }
   }
   const netPnl = grossPnl - entryFee - exitFee + fundingPnl;
   return {
     status: fundingComplete ? "closed" : "incomplete",
-    reason: fundingComplete ? null : "missing_funding_rate",
+    reason: fundingComplete ? null : "missing_or_ambiguous_funding_data",
     direction, entryMethod: config.entryMethod,
     entryIndex, entryTime, entryPrice, notional,
     hardStop, auxiliaryStop, takeProfit, rr,

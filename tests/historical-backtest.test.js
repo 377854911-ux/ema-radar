@@ -269,3 +269,17 @@ test("normalizes missing candle close times before signal-close execution", asyn
   assert.equal(result.accepted[0].entryTime, 106 * 900_000 - 1);
   assert.equal(result.accepted[0].exitReason, "take_profit");
 });
+
+test("breaks the EMA series when a candle close timestamp does not match its timeframe", async () => {
+  const dataset = makeDataset();
+  dataset.candlesBySymbolTimeframe["TESTUSDT|15m"][104].closeTime += 1;
+  const result = await runHistoricalBacktest(dataset, {
+    timeframes: ["15m"],
+    initialCapital: 10_000,
+    maxOpenTrades: 5,
+    tradeConfig
+  });
+  assert.equal(result.scanStats.missingIntervals, 1);
+  assert.equal(result.scanStats.signalsFound, 0);
+  assert.equal(result.accepted.length, 0);
+});

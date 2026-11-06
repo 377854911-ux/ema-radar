@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { createBacktestRange, runHistoricalBacktest } from "../js/historical-backtest.js";\nimport { calculateEMA } from "../js/ema-engine.js";
+import { createBacktestRange, runHistoricalBacktest } from "../js/historical-backtest.js";
+import { calculateEMA } from "../js/ema-engine.js";
 
 const tradeConfig = {
   entryMethod: "next_open",

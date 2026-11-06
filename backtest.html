@@ -137,7 +137,10 @@ async function run(){
   },timeframeSettings:Object.fromEntries(s.timeframes.map(tf=>[tf,{maxBodyPercent:s.bodyThresholds[tf]??null}]))},{
    onSignal:addLiveSignal,
    onProgress:p=>{
-    if(p.phase==="series-scan"||p.phase==="signal-scan"){
+    if(p.phase==="series-scan"){
+     $("scannedCount").textContent=String(p.symbolTimeframeSeries);
+    }
+    if(p.phase==="signal-scan"){
      $("scannedCount").textContent=String(p.symbolTimeframeSeries);
      $("signalCount").textContent=String(p.signalsFound);
     }

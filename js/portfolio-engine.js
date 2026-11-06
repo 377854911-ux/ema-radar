@@ -90,6 +90,7 @@ export function simulatePortfolio(candidates, options = {}) {
   let usedCapital = 0;
   let cumulativeTopUps = 0;
   let actualCashInjected = 0;
+  let actualCashWithdrawn = 0;
   let lossStreak = 0;
   let capitalAccountingComplete = true;
   const capitalEvents = [];
@@ -223,9 +224,11 @@ export function simulatePortfolio(candidates, options = {}) {
         equitySnapshots.push({
           time: exitTime,
           balance: accountBalance,
-          type: "capital_replenishment_batch"
+          type: "capital_replenishment_batch",
+          externalFlow: topUp - normalizationWithdrawal
         });
         actualCashInjected += topUp;
+        actualCashWithdrawn += normalizationWithdrawal;
         cumulativeTopUps += Math.max(0, restoreAdjustment) + bonusAmount;
         capitalEvents.push({
           time: exitTime,
@@ -333,24 +336,84 @@ export function simulatePortfolio(candidates, options = {}) {
     timeframe: x.candidate.timeframe,
     distanceRate: x.candidate.distanceRate
   }));
-  // Compute equity drawdown in realized exit chronology, not entry order.
+  // Calculate flow-adjusted, mark-to-market equity. Deposits and withdrawals
+  // change cash but are removed from the performance series, so neither can
+  // create or erase a drawdown. Open positions are marked to the latest candle
+  // close available at each timestamp, less an estimated liquidation fee.
   const realizedInExitOrder = [...completedTrades]
     .filter(trade => trade.exitTime != null)
     .sort((a, b) => a.exitTime - b.exitTime);
   const summary = summarizeBacktest(realizedInExitOrder, initialCapital);
+  let equityCurve = [];
   if (capitalAccountingComplete) {
+    const cashEvents = equitySnapshots
+      .map((event, index) => ({ ...event, _order: index }))
+      .filter(event => Number.isFinite(event.time))
+      .sort((a, b) => a.time - b.time || a._order - b._order);
+    const timestamps = new Set(cashEvents.map(event => event.time));
+    for (const item of accepted) {
+      const candles = item.candidate.candles;
+      for (let i = item.trade.entryIndex; i < candles.length; i++) {
+        const candle = candles[i];
+        const closeTime = candle.closeTime ?? candle.openTime;
+        if (closeTime >= item.trade.entryTime
+            && (item.trade.exitTime == null || closeTime < item.trade.exitTime)) {
+          timestamps.add(closeTime);
+        }
+      }
+    }
+
+    let cashBalance = initialCapital;
+    let netExternalFlows = 0;
+    let cashCursor = 0;
     let peak = initialCapital;
     let maxDrawdown = 0;
-    for (const event of equitySnapshots) {
-      peak = Math.max(peak, event.balance);
+    for (const time of [...timestamps].sort((a, b) => a - b)) {
+      while (cashCursor < cashEvents.length && cashEvents[cashCursor].time <= time) {
+        const event = cashEvents[cashCursor++];
+        cashBalance = event.balance;
+        netExternalFlows += Number(event.externalFlow ?? 0);
+      }
+
+      let unrealizedPnl = 0;
+      for (const item of accepted) {
+        const trade = item.trade;
+        if (trade.entryTime > time || (trade.exitTime != null && trade.exitTime <= time)) continue;
+        const candles = item.candidate.candles;
+        let markPrice = trade.entryPrice;
+        for (let i = trade.entryIndex; i < candles.length; i++) {
+          const candle = candles[i];
+          const closeTime = candle.closeTime ?? candle.openTime;
+          if (closeTime > time || closeTime >= (trade.exitTime ?? Infinity)) break;
+          markPrice = candle.close;
+        }
+        const directionSign = trade.direction === "LONG" ? 1 : -1;
+        const grossUnrealized = directionSign
+          * (markPrice - trade.entryPrice) * trade.notional / trade.entryPrice;
+        const estimatedExitFee = trade.notional * markPrice / trade.entryPrice
+          * Number(item.candidate.config?.exitFeeRate ?? 0) / 100;
+        unrealizedPnl += grossUnrealized - estimatedExitFee;
+      }
+
+      const adjustedEquity = cashBalance + unrealizedPnl - netExternalFlows;
+      equityCurve.push({
+        time,
+        cashBalance,
+        unrealizedPnl,
+        netExternalFlows,
+        adjustedEquity
+      });
+      peak = Math.max(peak, adjustedEquity);
       if (peak > 0) {
-        maxDrawdown = Math.max(maxDrawdown, (peak - event.balance) / peak * 100);
+        maxDrawdown = Math.max(maxDrawdown, (peak - adjustedEquity) / peak * 100);
       }
     }
     summary.maxDrawdownPct = maxDrawdown;
+    summary.maxDrawdownBasis = "flow_adjusted_mark_to_market_equity";
   } else {
-    // Incomplete funding makes the final cash path unknowable.
+    // Incomplete funding makes both cash and mark-to-market equity uncertain.
     summary.maxDrawdownPct = null;
+    summary.maxDrawdownBasis = "unavailable_incomplete_funding";
   }
   summary.totalCapitalReplenished = cumulativeTopUps;
   summary.capitalAccountingComplete = capitalAccountingComplete;
@@ -365,6 +428,7 @@ export function simulatePortfolio(candidates, options = {}) {
       availableBalance: capitalAccountingComplete ? accountBalance - usedCapital : null,
       cumulativeTopUps,
       actualCashInjected,
+      actualCashWithdrawn,
       consecutiveLosses: lossStreak,
       capitalAccountingComplete,
       events: capitalEvents

@@ -170,7 +170,8 @@ export function runHistoricalBacktest(dataset, config = {}, options = {}) {
         scanStats.missingSeries.push({ symbol, timeframe, reason: "insufficient_candles" });
         continue;
       }
-      const tradeConfig = { ...config.tradeConfig, ...settings.tradeConfig };
+      const { maxBodyPercent: _maxBodyPercent, ...tradeOverrides } = settings;
+      const tradeConfig = { ...config.tradeConfig, ...tradeOverrides };
       const found = findSignalsForSeries({
         symbol, timeframe, rawCandles: candles, dataset, settings, tradeConfig
       });

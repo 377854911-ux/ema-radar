@@ -110,6 +110,7 @@ function addLiveSignal(signal){
  row.textContent=signal.symbol+" · "+signal.timeframe+" · "+(signal.direction==="LONG"?"多头 ↑":"空头 ↓")+" · "+time;
  if($("liveSignals").firstElementChild?.textContent.startsWith("正在扫描"))$("liveSignals").innerHTML="";
  $("liveSignals").prepend(row);
+ while($("liveSignals").children.length>100)$("liveSignals").lastElementChild.remove();
 }
 function showReport(result){
  const r=result.report;

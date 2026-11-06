@@ -52,7 +52,7 @@ test("reports missing daily universe dates instead of silently treating them as 
       const url = new URL(input);
       let data = [];
       if (url.pathname.endsWith("/exchangeInfo")) {
-        data = [{ symbol: "TESTUSDT", status: "TRADING", contractType: "PERPETUAL", quoteAsset: "USDT" }];
+        data = { symbols: [{ symbol: "TESTUSDT", status: "TRADING", contractType: "PERPETUAL", quoteAsset: "USDT" }] };
       } else if (url.pathname.endsWith("/klines") && url.searchParams.get("interval") === "1d") {
         data = [[priorDay, "100", "105", "99", "104", "10", startTime - 1, "2000"]];
       }

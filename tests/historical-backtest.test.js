@@ -187,6 +187,11 @@ test("skips a series when its trailing historical candles are missing", async ()
 test("a position left unresolved by a candle gap is incomplete, not an end-of-test open trade", async () => {
   const dataset = makeDataset();
   dataset.endTime = 509 * 900_000;
+  const entry = dataset.candlesBySymbolTimeframe["TESTUSDT|15m"][505].close;
+  dataset.candlesBySymbolTimeframe["TESTUSDT|15m"][506] = {
+    openTime: 506 * 900_000, closeTime: 507 * 900_000 - 1,
+    open: entry, high: entry * 1.002, low: entry * 0.998, close: entry * 1.001
+  };
   for (let i = 507; i < dataset.candlesBySymbolTimeframe["TESTUSDT|15m"].length; i++) {
     dataset.candlesBySymbolTimeframe["TESTUSDT|15m"][i].openTime += 900_000;
     dataset.candlesBySymbolTimeframe["TESTUSDT|15m"][i].closeTime += 900_000;

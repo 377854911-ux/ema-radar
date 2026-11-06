@@ -93,6 +93,51 @@ test("live EMA scanner seeds once, then fetches only candles since the cached cl
   }
 });
 
+test("live EMA scanner rebuilds its warm-up when incremental candles contain a gap", async () => {
+  const originalFetch = globalThis.fetch;
+  const originalNow = Date.now;
+  const intervalMs = 15 * 60_000;
+  const currentOpenTime = Math.floor(originalNow() / intervalMs) * intervalMs;
+  const baseOpenTime = currentOpenTime - 501 * intervalMs;
+  let fakeNow = currentOpenTime + 1000;
+  const requests = [];
+  const candle = openTime => [
+    openTime, "100", "101", "99", "100", "0", openTime + intervalMs - 1, "0"
+  ];
+  const firstWindow = Array.from({ length: 502 }, (_, i) => candle(baseOpenTime + i * intervalMs));
+  const refreshedBase = currentOpenTime - 500 * intervalMs;
+  const refreshedWindow = Array.from({ length: 502 }, (_, i) => candle(refreshedBase + i * intervalMs));
+  globalThis.fetch = async input => {
+    const url = new URL(input);
+    const startTime = url.searchParams.get("startTime");
+    requests.push({ startTime, limit: url.searchParams.get("limit") });
+    if (startTime === null && requests.length === 1) {
+      return { ok: true, json: async () => firstWindow };
+    }
+    if (startTime === String(currentOpenTime)) {
+      return { ok: true, json: async () => [candle(currentOpenTime + intervalMs)] };
+    }
+    if (startTime === null && requests.length === 3) {
+      return { ok: true, json: async () => refreshedWindow };
+    }
+    throw new Error("Unexpected kline request");
+  };
+  Date.now = () => fakeNow;
+  try {
+    await scanMarket({ symbols: ["GAPCACHEUSDT"], timeframes: ["15m"], concurrency: 1 });
+    fakeNow = currentOpenTime + intervalMs + 1000;
+    await scanMarket({ symbols: ["GAPCACHEUSDT"], timeframes: ["15m"], concurrency: 1 });
+    assert.equal(requests.length, 3);
+    assert.equal(requests[0].limit, "502");
+    assert.equal(requests[1].startTime, String(currentOpenTime));
+    assert.equal(requests[2].startTime, null);
+    assert.equal(requests[2].limit, "502");
+  } finally {
+    globalThis.fetch = originalFetch;
+    Date.now = originalNow;
+  }
+});
+
 test("funding rate map reads Binance last settled rates for selected symbols", async () => {
   const originalFetch = globalThis.fetch;
   globalThis.fetch = async () => ({

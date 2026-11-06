@@ -50,7 +50,8 @@ Smaller distance_rate ranks ahead of larger distance_rate. This is a ranking rul
 
 - Universe: Binance USDⓈ-M USDT perpetual contracts.
 - Select the top 100 contracts by 24-hour quote turnover (成交额), dynamically recalculated.
-- For historical backtests, use the top-100 universe applicable to each historical trading day; do not apply today's top 100 retrospectively to the whole period.
+- For historical backtests, each UTC trading day uses the top-100 turnover universe from the preceding completed UTC day. The first backtest day therefore requires one extra daily kline day before the requested range.
+- Never use a trading day's final quote volume or final daily close to decide which contracts were eligible earlier during that same day.
 - Exclude contracts whose 24-hour price change is strictly greater than +30% or strictly less than -30%. Exactly +30% or -30% is allowed.
 - Exclude Binance Monitoring/观察 labels, delisted or soon-to-be-delisted contracts, and contracts not currently trading.
 - Skip missing or invalid market-data intervals; never fabricate prices.
@@ -135,7 +136,7 @@ Backtest must avoid look-ahead bias. Signal-close entry must be modeled as execu
 
 Backtest periods: 7, 30, and 60 days only.
 
-- Each historical day uses that day's top-100 turnover universe.
+- Each historical trading day uses the top-100 turnover universe from the preceding completed UTC day; one extra prior daily candle is downloaded to establish the first day's universe.
 - Append the latest completed day's eligible data to the rolling historical store and remove the oldest day when the retention limit is exceeded.
 - Cache historical klines and download only missing data needed for the selected period/timeframes.
 - If a contract is delisted, stop treating it as an active eligible contract. Keep completed trade records in reports for auditability, while not continuing to treat the delisted contract as tradable.

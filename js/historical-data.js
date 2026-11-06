@@ -242,7 +242,8 @@ export async function buildHistoricalTop100({
   const limitations = [
     "Universe starts from contracts that are currently active; delisted historical contracts are not reconstructed.",
     "Historical 24-hour price-change filter is approximated by each UTC daily candle open-to-close return.",
-    "Historical Monitoring labels are not available from the public endpoint used."
+    "Historical Monitoring labels are not available from the public endpoint used.",
+    "Funding completeness checks use Binance's standard 8-hour UTC settlement schedule; historical symbol-specific interval changes are not reconstructed."
   ];
   if (missingUniverseDays.length) {
     const dates = missingUniverseDays.map(day => new Date(day).toISOString().slice(0, 10));

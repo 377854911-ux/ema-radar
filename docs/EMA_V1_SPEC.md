@@ -71,7 +71,7 @@ Supported timeframes:
 - If the same symbol qualifies on multiple selected timeframes at the same time, only the shortest timeframe may open a position; longer-timeframe signals are ignored for that simultaneous opportunity.
 - A maximum of five open trades across the account at once. When more than five fresh eligible signals exist, prioritize by EMA distance_rate, smallest first. Do not keep expired signals waiting for a free slot.
 - Same symbol may have multiple independent positions in the same direction.
-- Same symbol may not hold long and short simultaneously. An opposite-direction trade can open only after all existing positions on that symbol have closed; the opposite signal must still be fresh and unexpired at that time.
+- Same symbol may not hold long and short simultaneously. If a symbol has one or more open long positions, an opposite short signal must wait until all long positions on that symbol have closed. Then only a newly formed, fresh short signal may open; never reuse the signal that appeared while the long positions were open if it has expired. Apply the inverse rule when short positions are open and a long signal appears.
 
 ## 6. Entry options
 
@@ -180,6 +180,5 @@ Trading costs:
 ## 14. Items requiring user confirmation before backtest implementation
 
 
-3. For a same-symbol opposite-direction signal while a position is open: wait until all positions close, then open only if a new fresh signal appears; never reuse an expired signal.
 
 No implementation should silently invent answers to these unresolved items.

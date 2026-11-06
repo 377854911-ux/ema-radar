@@ -152,6 +152,9 @@ test("ambiguous trades are excluded from win rate denominator but fees remain in
   assert.equal(summary.resolvedTrades, 2);
   assert.equal(summary.ambiguousTradeCount, 1);
   assert.equal(summary.winRatePct, 50);
+  assert.equal(summary.totalProfit, 20);
+  assert.equal(summary.totalLoss, 11);
+  assert.equal(summary.netProfit, summary.totalProfit - summary.totalLoss);
   assert.equal(summary.netProfit, 9);
   assert.equal(summary.takeProfitCount, 1);
   assert.equal(summary.stopLossCount, 1);

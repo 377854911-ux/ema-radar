@@ -53,7 +53,7 @@ function makeDataset() {
   };
   return {
     startTime: 0,
-    endTime: 10 * 86_400_000,
+    endTime: 508 * 900_000,
     timeframes: ["15m"],
     dailyUniverse: {
       [4 * 86_400_000]: [{ symbol: "TESTUSDT", quoteVolume: 1_000_000 }]
@@ -140,6 +140,7 @@ test("rolling period helper only accepts the supported 7/30/60 day periods", asy
 
 test("does not carry EMA signals or trades across missing candle intervals", async () => {
   const dataset = makeDataset();
+  dataset.endTime = 509 * 900_000;
   for (let i = 506; i < dataset.candlesBySymbolTimeframe["TESTUSDT|15m"].length; i++) {
     dataset.candlesBySymbolTimeframe["TESTUSDT|15m"][i].openTime += 900_000;
     dataset.candlesBySymbolTimeframe["TESTUSDT|15m"][i].closeTime += 900_000;
@@ -156,6 +157,7 @@ test("does not carry EMA signals or trades across missing candle intervals", asy
 
 test("a data gap forces a fresh 500-bar EMA warm-up before new signals", async () => {
   const dataset = makeDataset();
+  dataset.endTime = 509 * 900_000;
   for (let i = 250; i < dataset.candlesBySymbolTimeframe["TESTUSDT|15m"].length; i++) {
     dataset.candlesBySymbolTimeframe["TESTUSDT|15m"][i].openTime += 900_000;
     dataset.candlesBySymbolTimeframe["TESTUSDT|15m"][i].closeTime += 900_000;
@@ -167,6 +169,18 @@ test("a data gap forces a fresh 500-bar EMA warm-up before new signals", async (
   assert.equal(result.scanStats.signalsFound, 0);
   assert.ok(result.scanStats.missingSeries.some(item =>
     item.reason === "contiguous_segment_too_short_after_data_gap"
+  ));
+});
+
+test("skips a series when its trailing historical candles are missing", async () => {
+  const dataset = makeDataset();
+  dataset.candlesBySymbolTimeframe["TESTUSDT|15m"].pop();
+  const result = await runHistoricalBacktest(dataset, {
+    timeframes: ["15m"], initialCapital: 10_000, maxOpenTrades: 5, tradeConfig
+  });
+  assert.equal(result.scanStats.signalsFound, 0);
+  assert.ok(result.scanStats.missingSeries.some(item =>
+    item.reason === "trailing_candles_missing"
   ));
 });
 

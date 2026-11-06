@@ -65,6 +65,36 @@ test("detects a bullish candle containing all three EMAs with EMA100 lowest afte
   assert.ok(result.signal.ema100 < result.signal.ema50);
 });
 
+test("rejects a bullish candle when all EMAs are inside its body but EMA100 is not lowest", () => {
+  const candles = fallingHistory();
+  const closes = candles.map(row => Number(row[4]));
+  const e25 = calculateEMA(closes, 25).at(-1);
+  const e50 = calculateEMA(closes, 50).at(-1);
+  const e100 = calculateEMA(closes, 100).at(-1);
+  const open = Math.min(e25, e50, e100) - 1;
+  const close = Math.max(e25, e50, e100) + 1;
+  candles.push(makeCandle(30_000_000, open, close + 0.1, open - 0.1, close));
+  candles.push(makeCandle(30_060_000, close, close + 0.2, close - 0.2, close + 0.1));
+  const result = analyzeLatestClosedSignal(candles, { timeframe: "1m" });
+  assert.equal(result.signal, null);
+  assert.equal(result.reason, "conditions_not_met");
+});
+
+test("rejects a bullish candle with correct EMA ordering when one EMA is outside its body", () => {
+  const candles = risingHistory();
+  const closes = candles.map(row => Number(row[4]));
+  const e25 = calculateEMA(closes, 25).at(-1);
+  const e50 = calculateEMA(closes, 50).at(-1);
+  const e100 = calculateEMA(closes, 100).at(-1);
+  const open = e100 + 0.5;
+  const close = Math.max(e25, e50) + 1;
+  candles.push(makeCandle(30_000_000, open, close + 0.1, open - 0.1, close));
+  candles.push(makeCandle(30_060_000, close, close + 0.2, close - 0.2, close + 0.1));
+  const result = analyzeLatestClosedSignal(candles, { timeframe: "1m" });
+  assert.equal(result.signal, null);
+  assert.equal(result.reason, "conditions_not_met");
+});
+
 test("detects a bearish candle containing all three EMAs with EMA100 highest after 500 warm-up bars", () => {
   const candles = fallingHistory();
   const closes = candles.map(row => Number(row[4]));

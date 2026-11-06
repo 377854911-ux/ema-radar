@@ -1,4 +1,4 @@
-import { calculateEMA, TIMEFRAME_MINUTES, EMA_WARMUP_BARS } from "./ema-engine.js";
+import { calculateEMA, analyzeSignalCandle, TIMEFRAME_MINUTES, EMA_WARMUP_BARS } from "./ema-engine.js";
 import { simulatePortfolio } from "./portfolio-engine.js";
 import { isFundingRateAllowed, latestKnownFundingRate } from "./funding-filter.js";
 
@@ -108,28 +108,17 @@ function findSignalsForSeries({
     if (!dailyRows.some(row => row.symbol === symbol)) continue;
     if (!validCandle(signalCandle, intervalMs) || !validCandle(nextCandle, intervalMs)) continue;
 
-    const values = [ema25[i], ema50[i], ema100[i]];
-    if (!values.every(Number.isFinite)) continue;
-    const bodyPercent = Math.abs(signalCandle.close - signalCandle.open)
-      / signalCandle.open * 100;
-    if (maxBodyPercent !== null && maxBodyPercent !== undefined) {
-      const threshold = Number(maxBodyPercent);
-      if (!Number.isFinite(threshold) || threshold <= 0 || bodyPercent >= threshold) continue;
-    }
-
-    const bullish = signalCandle.close > signalCandle.open;
-    const bearish = signalCandle.close < signalCandle.open;
-    const allInsideBullBody = bullish
-      && values.every(value => value > signalCandle.open && value < signalCandle.close);
-    const allInsideBearBody = bearish
-      && values.every(value => value < signalCandle.open && value > signalCandle.close);
-    let direction = null;
-    if (allInsideBullBody && ema100[i] < ema25[i] && ema100[i] < ema50[i]) {
-      direction = "LONG";
-    } else if (allInsideBearBody && ema100[i] > ema25[i] && ema100[i] > ema50[i]) {
-      direction = "SHORT";
-    }
+    // Use the exact same signal predicate as the live radar. A valid signal
+    // requires BOTH the EMA100 ordering and all three EMAs inside one candle body.
+    const evaluated = analyzeSignalCandle(signalCandle, {
+      25: ema25[i],
+      50: ema50[i],
+      100: ema100[i]
+    }, { timeframe, maxBodyPercent });
+    const direction = evaluated.signal?.direction ?? null;
     if (!direction) continue;
+    const values = [ema25[i], ema50[i], ema100[i]];
+    const bodyPercent = evaluated.signal.bodyPercent;
 
     let fundingRateAtSignal = null;
     if (fundingFilterPct > 0) {

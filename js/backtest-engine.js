@@ -111,8 +111,15 @@ export function simulateTrade({ candles, signalIndex, direction, config, funding
 
   const entrySlippageRate = num(config.entrySlippageRate, "entrySlippageRate");
   const slippageRate = num(config.slippageRate, "slippageRate");
+  // A resting limit order receives price improvement when the market opens
+  // through the limit: buy at the lower open, sell at the higher open.
+  const limitFillPrice = config.entryMethod === "retracement_limit"
+    ? (direction === "LONG"
+        ? Math.min(rawEntry, candles[entryIndex].open)
+        : Math.max(rawEntry, candles[entryIndex].open))
+    : rawEntry;
   const entryPrice = config.entryMethod === "retracement_limit"
-    ? rawEntry
+    ? limitFillPrice
     : adversePrice(rawEntry, direction, entrySlippageRate, true);
   if (entryPrice <= 0) throw new RangeError("calculated entry price must be positive");
 

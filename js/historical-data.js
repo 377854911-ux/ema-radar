@@ -186,8 +186,19 @@ export async function fetchKlinesRange({
     cursor = next;
     if (rows.length < MAX_KLINES) break;
   }
-  const unique = [...new Map(all.filter(c => c.openTime >= startTime && c.openTime < endTime)
-    .map(c => [c.openTime, c])).values()].sort((a, b) => a.openTime - b.openTime);
+  const byOpenTime = new Map();
+  for (const candle of all.filter(c => c.openTime >= startTime && c.openTime < endTime)) {
+    const prior = byOpenTime.get(candle.openTime);
+    if (prior) {
+      const fields = ["closeTime", "open", "high", "low", "close", "volume", "quoteVolume"];
+      if (fields.some(field => prior[field] !== candle[field])) {
+        throw new Error(`Conflicting Binance kline records for ${symbol} ${interval} at ${candle.openTime}`);
+      }
+      continue;
+    }
+    byOpenTime.set(candle.openTime, candle);
+  }
+  const unique = [...byOpenTime.values()].sort((a, b) => a.openTime - b.openTime);
   await cache.put(cacheKey, unique, `${symbol}|${interval}`);
   return unique;
 }

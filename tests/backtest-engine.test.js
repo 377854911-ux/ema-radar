@@ -206,3 +206,34 @@ test("funding settlement exactly at entry or exit timestamp is marked ambiguous"
   assert.equal(atExit.status, "incomplete");
   assert.equal(atExit.reason, "missing_or_ambiguous_funding_data");
 });
+
+
+test("long stop gap fills at the worse candle open, not the stop trigger", () => {
+  const data = [
+    { openTime: 0, closeTime: 9, open: 98, high: 101, low: 97, close: 100 },
+    { openTime: 10, closeTime: 19, open: 95, high: 97, low: 94, close: 96 },
+    { openTime: 20, closeTime: 29, open: 96, high: 97, low: 95, close: 96 }
+  ];
+  const result = simulateTrade({
+    candles: data, signalIndex: 0, direction: "LONG",
+    config: { ...base, auxiliaryStop: "signal_open" }
+  });
+  assert.equal(result.exitReason, "stop_loss");
+  assert.equal(result.exitPrice, 95);
+  assert.equal(result.grossPnl, -25);
+});
+
+test("short stop gap fills at the worse candle open, not the stop trigger", () => {
+  const data = [
+    { openTime: 0, closeTime: 9, open: 100, high: 103, low: 99, close: 98 },
+    { openTime: 10, closeTime: 19, open: 102, high: 103, low: 101, close: 102.5 },
+    { openTime: 20, closeTime: 29, open: 102.5, high: 103, low: 102, close: 102.5 }
+  ];
+  const result = simulateTrade({
+    candles: data, signalIndex: 0, direction: "SHORT",
+    config: { ...base, auxiliaryStop: "signal_open" }
+  });
+  assert.equal(result.exitReason, "stop_loss");
+  assert.equal(result.exitPrice, 102);
+  assert.ok(result.grossPnl < -20);
+});

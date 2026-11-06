@@ -38,6 +38,11 @@ test("incremental EMA update matches the recursive series calculation", () => {
   }
 });
 
+test("incremental EMA updates reject missing values instead of treating null as zero", () => {
+  assert.equal(updateEMAValue(null, 100, 25), null);
+  assert.equal(updateEMAValue(100, null, 25), null);
+});
+
 test("insufficient candles do not create a signal", () => {
   const result = analyzeLatestClosedSignal(Array.from({ length: 501 }, (_, i) => makeCandle(i * 60_000, 100, 101, 99, 100)));
   assert.equal(result.signal, null);

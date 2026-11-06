@@ -218,6 +218,10 @@ export async function runHistoricalBacktest(dataset, config = {}, options = {}) 
     if (!Object.hasOwn(TIMEFRAME_MINUTES, timeframe)) {
       throw new RangeError(`Unsupported timeframe: ${timeframe}`);
     }
+    const intervalMs = TIMEFRAME_MINUTES[timeframe] * 60_000;
+    if (dataset.endTime % intervalMs !== 0) {
+      throw new RangeError(`dataset.endTime must align to the selected ${timeframe} candle boundary`);
+    }
   }
   const candidates = [];
   const scanStats = {

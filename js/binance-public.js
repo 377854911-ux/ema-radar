@@ -1,4 +1,4 @@
-import { analyzeLatestClosedSignal, rankAndDeduplicateSignals, TIMEFRAME_MINUTES } from "./ema-engine.js";
+import { analyzeLatestClosedSignal, rankAndDeduplicateSignals, TIMEFRAME_MINUTES, EMA_WARMUP_BARS } from "./ema-engine.js";
 import { isFundingRateAllowed } from "./funding-filter.js";
 
 const API_BASE = "https://fapi.binance.com";
@@ -63,7 +63,7 @@ export async function getFundingRateMap(symbols) {
     ]));
 }
 
-export async function getKlines(symbol, interval, limit = 120) {
+export async function getKlines(symbol, interval, limit = EMA_WARMUP_BARS + 2) {
   if (!SUPPORTED_TIMEFRAMES.includes(interval)) {
     throw new RangeError(`Unsupported Binance timeframe: ${interval}`);
   }
@@ -129,7 +129,7 @@ export async function scanMarket({
           return null;
         }
       }
-      const candles = await getKlines(symbol, task.timeframe, 120);
+      const candles = await getKlines(symbol, task.timeframe, EMA_WARMUP_BARS + 2);
       const { signal } = analyzeLatestClosedSignal(candles, {
         timeframe: task.timeframe,
         maxBodyPercent: bodyThresholds[task.timeframe]

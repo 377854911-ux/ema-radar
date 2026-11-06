@@ -239,6 +239,13 @@ export function runHistoricalBacktest(dataset, config = {}, options = {}) {
     },
     selectedTimeframes,
     scanStats,
+    datasetStats: {
+      symbolsChecked: dataset.symbolsCheckedForDailyUniverse ?? null,
+      symbolsIncluded: dataset.symbolsIncluded?.length
+        ?? new Set(Object.keys(dataset.candlesBySymbolTimeframe).map(key => key.slice(0, key.lastIndexOf("|")))).size,
+      dailyUniverseDays: Object.keys(dataset.dailyUniverse).length,
+      candleSeries: Object.keys(dataset.candlesBySymbolTimeframe).length
+    },
     ...portfolio,
     report: {
       openTrades: portfolio.accepted.filter(trade => trade.status === "open").length,

@@ -90,7 +90,10 @@ export function analyzeSignalCandle(rawSignalCandle, rawEmaValues, options = {})
   const { timeframe = null, maxBodyPercent = null, expiresAt = null } = options;
   const signalCandle = normalizeCandle(rawSignalCandle);
   const emaValues = Object.fromEntries(
-    EMA_PERIODS.map(period => [period, Number(rawEmaValues?.[period])])
+    EMA_PERIODS.map(period => {
+      const raw = rawEmaValues?.[period];
+      return [period, raw === null || raw === undefined || raw === "" ? NaN : Number(raw)];
+    })
   );
   if (!isValidCandle(signalCandle)) {
     return { signal: null, reason: "invalid_latest_candle", emaValues };
@@ -151,8 +154,10 @@ export function updateEMAValue(previousValue, close, period) {
   if (!Number.isInteger(period) || period < 1) {
     throw new RangeError("EMA period must be a positive integer.");
   }
-  const previous = Number(previousValue);
-  const value = Number(close);
+  const previous = previousValue === null || previousValue === undefined || previousValue === ""
+    ? NaN : Number(previousValue);
+  const value = close === null || close === undefined || close === ""
+    ? NaN : Number(close);
   if (!Number.isFinite(previous) || !Number.isFinite(value)) return null;
   const alpha = 2 / (period + 1);
   return value * alpha + previous * (1 - alpha);

@@ -340,6 +340,10 @@ export async function runHistoricalBacktest(dataset, config = {}, options = {}) 
       symbolsIncluded: dataset.symbolsIncluded?.length
         ?? new Set(Object.keys(dataset.candlesBySymbolTimeframe).map(key => key.slice(0, key.lastIndexOf("|")))).size,
       dailyUniverseDays: Object.keys(dataset.dailyUniverse).length,
+      dailyUniverseDaysExpected: dataset.expectedUniverseDays ?? null,
+      missingUniverseDays: Array.isArray(dataset.missingUniverseDays)
+        ? dataset.missingUniverseDays.length : 0,
+      missingSeriesCount: scanStats.missingSeries.length,
       candleSeries: Object.keys(dataset.candlesBySymbolTimeframe).length
     },
     ...portfolio,

@@ -270,20 +270,15 @@ export function simulatePortfolio(candidates, options = {}) {
       continue;
     }
 
-    // Opposite direction is blocked if a position was open at signal time,
-    // even if that position closes before a later limit order could fill.
-    const opposite = accepted.find(x =>
+    // A symbol may have only one open position at a time, regardless of
+    // direction or timeframe. A new signal is allowed after the prior trade exits.
+    const existingSymbolPosition = accepted.find(x =>
       x.candidate.symbol === candidate.symbol
-      && x.candidate.direction !== candidate.direction
-      && (
-        (x.trade.entryTime <= candidate._signalTime
-          && (x.trade.exitTime == null || x.trade.exitTime > candidate._signalTime))
-        || (x.trade.entryTime <= trade.entryTime
-          && (x.trade.exitTime == null || x.trade.exitTime > trade.entryTime))
-      )
+      && x.trade.entryTime <= trade.entryTime
+      && (x.trade.exitTime == null || x.trade.exitTime > trade.entryTime)
     );
-    if (opposite) {
-      skipped.push({ candidate, reason: "opposite_position_open_at_signal" });
+    if (existingSymbolPosition) {
+      skipped.push({ candidate, reason: "symbol_already_has_open_position" });
       continue;
     }
 

@@ -251,6 +251,34 @@ export function simulatePortfolio(candidates, options = {}) {
 
   settleUntil(Infinity);
 
+  // Positions still open at the end of the downloaded history keep their
+  // notional reserved. Apply only known funding cash flows through the final
+  // candle; do not mark unrealized price PnL as realized account profit.
+  for (const item of accepted.filter(x => x.trade.exitTime == null)) {
+    const trade = item.trade;
+    if (trade.fundingComplete !== true || !Number.isFinite(trade.fundingPnl)) {
+      capitalAccountingComplete = false;
+      capitalEvents.push({
+        time: trade.asOfTime ?? null,
+        symbol: item.candidate.symbol,
+        type: "open_position_funding_incomplete"
+      });
+      continue;
+    }
+    accountBalance += trade.fundingPnl;
+    equitySnapshots.push({
+      time: trade.asOfTime ?? Infinity,
+      balance: accountBalance,
+      type: "open_position_funding"
+    });
+    capitalEvents.push({
+      time: trade.asOfTime ?? null,
+      symbol: item.candidate.symbol,
+      type: "open_position_funding",
+      fundingPnl: trade.fundingPnl
+    });
+  }
+
   const completedTrades = accepted.map(x => ({
     ...x.trade,
     symbol: x.candidate.symbol,

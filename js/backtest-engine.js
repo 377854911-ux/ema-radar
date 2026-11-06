@@ -149,13 +149,25 @@ export function simulateTrade({ candles, signalIndex, direction, config, funding
       : stopLevels.some(level => c.high >= level);
     const tpTouched = direction === "LONG" ? c.high >= takeProfit : c.low <= takeProfit;
 
+    const targetCanBeEvaluated = !(config.entryMethod === "retracement_limit" && i === entryIndex);
+    if (stopTouched && tpTouched && targetCanBeEvaluated) {
+      // OHLC data cannot reveal which level was reached first. Per user rule,
+      // offset the gross outcome to zero; entry/exit fees and funding still apply.
+      exit = {
+        index: i,
+        reason: "ambiguous_both_touched",
+        rawPrice: entryPrice,
+        price: entryPrice,
+        time: c.closeTime ?? c.openTime
+      };
+      break;
+    }
     if (stopTouched) {
-      // If TP and stop are both inside one OHLC bar, stop wins (worst case).
       const rawStop = direction === "LONG" ? Math.min(...stopLevels.filter(level => c.low <= level)) : Math.max(...stopLevels.filter(level => c.high >= level));
       exit = { index: i, reason: "stop_loss", rawPrice: rawStop, price: adversePrice(rawStop, direction, slippageRate, false), time: c.closeTime ?? c.openTime };
       break;
     }
-    if (tpTouched && !(config.entryMethod === "retracement_limit" && i === entryIndex)) {
+    if (tpTouched && targetCanBeEvaluated) {
       exit = { index: i, reason: "take_profit", rawPrice: takeProfit, price: takeProfit, time: c.closeTime ?? c.openTime };
       break;
     }
@@ -220,7 +232,7 @@ export function simulateTrade({ candles, signalIndex, direction, config, funding
     grossPnl, entryFee, exitFee, fundingPnl, fundingEvents: relevantFunding,
     netPnl: fundingComplete ? netPnl : null,
     fundingComplete,
-    conservativeIntrabarRule: "stop_loss_precedes_take_profit_when_both_touch_same_candle"
+    conservativeIntrabarRule: exit.reason === "ambiguous_both_touched" ? "gross_pnl_zero_when_both_touch_same_candle" : null
   };
 }
 
@@ -229,11 +241,14 @@ export function summarizeBacktest(trades, initialCapital = 10_000) {
   positive(initialCapital, "initialCapital");
   const complete = trades.filter(t => t.status === "closed" && Number.isFinite(t.netPnl));
   const incomplete = trades.filter(t => t.status === "incomplete" || t.status === "unclassifiable");
-  const wins = complete.filter(t => t.netPnl > 0).length;
-  const losses = complete.filter(t => t.netPnl < 0).length;
+  const decisive = complete.filter(t => t.exitReason !== "ambiguous_both_touched");
+  const wins = decisive.filter(t => t.netPnl > 0).length;
+  const losses = decisive.filter(t => t.netPnl < 0).length;
+  // Net profit includes fees/funding from every completed trade, including
+  // ambiguous same-candle exits whose gross PnL is deliberately zero.
   const netProfit = complete.reduce((sum, t) => sum + t.netPnl, 0);
-  const grossWins = complete.filter(t => t.netPnl > 0).reduce((sum, t) => sum + t.netPnl, 0);
-  const grossLosses = Math.abs(complete.filter(t => t.netPnl < 0).reduce((sum, t) => sum + t.netPnl, 0));
+  const grossWins = decisive.filter(t => t.netPnl > 0).reduce((sum, t) => sum + t.netPnl, 0);
+  const grossLosses = Math.abs(decisive.filter(t => t.netPnl < 0).reduce((sum, t) => sum + t.netPnl, 0));
   let equity = initialCapital;
   let peak = initialCapital;
   let maxDrawdown = 0;
@@ -245,10 +260,12 @@ export function summarizeBacktest(trades, initialCapital = 10_000) {
   return {
     totalReturnPct: netProfit / initialCapital * 100,
     netProfit,
-    winRatePct: complete.length ? wins / complete.length * 100 : 0,
+    winRatePct: wins + losses ? wins / (wins + losses) * 100 : 0,
     riskRewardRatio: grossLosses > 0 ? grossWins / grossLosses : null,
     maxDrawdownPct: maxDrawdown,
     totalTrades: complete.length,
+    resolvedTrades: decisive.length,
+    ambiguousTradeCount: complete.filter(t => t.exitReason === "ambiguous_both_touched").length,
     takeProfitCount: complete.filter(t => t.exitReason === "take_profit").length,
     stopLossCount: complete.filter(t => t.exitReason === "stop_loss").length,
     timeoutCloseCount: complete.filter(t => t.exitReason === "timeout").length,

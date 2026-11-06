@@ -1,6 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { buildDailyUniverse, normalizeKline, fetchBacktestDataset, EMA_WARMUP_BARS, fetchFundingHistory, fetchKlinesRange, createHistoricalCache } from "../js/historical-data.js";
+import { runHistoricalBacktest } from "../js/historical-backtest.js";
+import { calculateEMA } from "../js/ema-engine.js";
 
 test("historical cache falls back to page memory when IndexedDB is unavailable", async () => {
   const cache = createHistoricalCache(null);
@@ -240,4 +242,86 @@ test("rejects conflicting duplicate historical kline rows instead of choosing on
     cache: { async get() { return null; }, async put() { throw new Error("must not cache invalid rows"); } },
     fetchImpl: async () => ({ ok: true, json: async () => [row, conflicting] })
   }), /Conflicting Binance kline records/);
+});
+
+
+test("public historical download feeds a complete EMA backtest end to end", async () => {
+  const dayMs = 86_400_000;
+  const intervalMs = 900_000;
+  const startTime = 20 * dayMs;
+  const endTime = startTime + dayMs;
+  const warmupStart = startTime - EMA_WARMUP_BARS * intervalMs;
+  const candles = Array.from({ length: EMA_WARMUP_BARS + 96 }, (_, i) => {
+    const close = 100 + i * 0.01;
+    const openTime = warmupStart + i * intervalMs;
+    return [
+      openTime, String(close - 0.02), String(close + 0.1),
+      String(close - 0.1), String(close), "10",
+      openTime + intervalMs - 1, "1000"
+    ];
+  });
+  const signalIndex = EMA_WARMUP_BARS + 5;
+  const emaValues = [25, 50, 100].map(period =>
+    calculateEMA(candles.map(row => Number(row[4])), period)[signalIndex]
+  );
+  const signalOpen = Math.min(...emaValues) - 1;
+  const signalClose = Math.max(...emaValues) + 1;
+  const signalTime = warmupStart + signalIndex * intervalMs;
+  candles[signalIndex] = [
+    signalTime, String(signalOpen), String(signalClose + 1),
+    String(signalOpen - 1), String(signalClose), "10",
+    signalTime + intervalMs - 1, "1000"
+  ];
+  const nextTime = signalTime + intervalMs;
+  candles[signalIndex + 1] = [
+    nextTime, String(signalClose), String(signalClose * 1.1),
+    String(signalClose - 0.1), String(signalClose * 1.05), "10",
+    nextTime + intervalMs - 1, "1000"
+  ];
+  const dailyRows = [startTime - dayMs, startTime].map(openTime => [
+    openTime, "100", "101", "99", "100", "100",
+    openTime + dayMs - 1, "100000"
+  ]);
+  const dataset = await fetchBacktestDataset({
+    startTime, endTime, timeframes: ["15m"], concurrency: 1,
+    fetchImpl: async input => {
+      const url = new URL(input);
+      let data = [];
+      if (url.pathname.endsWith("/exchangeInfo")) {
+        data = { symbols: [{
+          symbol: "TESTUSDT", status: "TRADING",
+          contractType: "PERPETUAL", quoteAsset: "USDT"
+        }] };
+      } else if (url.pathname.endsWith("/klines")) {
+        data = url.searchParams.get("interval") === "1d" ? dailyRows : candles;
+      } else if (url.pathname.endsWith("/fundingRate")) {
+        data = [];
+      }
+      return { ok: true, json: async () => data };
+    }
+  });
+  const result = await runHistoricalBacktest(dataset, {
+    initialCapital: 10_000,
+    maxOpenTrades: 5,
+    timeframes: ["15m"],
+    tradeConfig: {
+      entryMethod: "next_open",
+      hardStopPct: 2,
+      auxiliaryStop: "signal_open",
+      rr: 1.1,
+      positionNotional: 500,
+      entryFeeRate: 0,
+      exitFeeRate: 0,
+      entrySlippageRate: 0,
+      slippageRate: 0,
+      timeoutBars: null
+    }
+  });
+  assert.equal(dataset.missingUniverseDays.length, 0);
+  assert.equal(result.datasetStats.candleSeries, 1);
+  assert.equal(result.scanStats.signalsFound, 1);
+  assert.equal(result.accepted.length, 1);
+  assert.equal(result.accepted[0].status, "closed");
+  assert.equal(result.accepted[0].exitReason, "take_profit");
+  assert.ok(result.report.netProfit > 0);
 });

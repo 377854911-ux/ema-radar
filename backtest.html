@@ -158,9 +158,9 @@ function addLiveSignal(signal){
  $("liveSignals").prepend(row);
  while($("liveSignals").children.length>100)$("liveSignals").lastElementChild.remove();
 }
-function showReport(result){
+function showReport(result,timing={}){
  const r=result.report;
- const rows=[["策略收益率（按初始资金）",fmt(r.totalReturnPct)+"%"],["总盈利（扣费后）",fmt(r.totalProfit)+" USDT"],["总亏损（扣费后）",fmt(r.totalLoss)+" USDT"],["净总盈亏（总盈利−总亏损）",fmt(r.netProfit)+" USDT"],["胜率",fmt(r.winRatePct)+"%"],["盈亏比",fmt(r.riskRewardRatio)],["最大回撤（按K线收盘价计浮动盈亏，剔除注资/提取）",fmt(r.maxDrawdownPct)+"%"],["有效交易",fmt(r.totalTrades,0)],["止盈次数",fmt(r.takeProfitCount,0)],["止损次数",fmt(r.stopLossCount,0)],["超时平仓",fmt(r.timeoutCloseCount,0)],["累计补充额度（名义）",fmt(r.totalCapitalReplenished)+" USDT"],["实际注入资金",fmt(result.capital.actualCashInjected)+" USDT"],["实际提取资金",fmt(result.capital.actualCashWithdrawn)+" USDT"],["资金费率过滤信号",fmt(result.scanStats.fundingFilteredSignals,0)],["历史费率缺失信号",fmt(result.scanStats.fundingRateUnavailableSignals,0)],["未完成/无法分类",fmt(r.incompleteTrades,0)],["未平仓交易",fmt(r.openTrades,0)],["缺失数据间隔",fmt(result.scanStats.missingIntervals,0)],["历史名单覆盖天数",fmt(result.datasetStats.dailyUniverseDays,0)+(result.datasetStats.dailyUniverseDaysExpected===null?"":" / "+fmt(result.datasetStats.dailyUniverseDaysExpected,0))],["缺失每日名单日期",fmt(result.datasetStats.missingUniverseDays,0)],["缺失/预热不足K线序列",fmt(result.datasetStats.missingSeriesCount,0)],["纳入交易对",fmt(result.datasetStats.symbolsIncluded,0)],["已检查合约",fmt(result.datasetStats.symbolsChecked,0)],["K线数据序列",fmt(result.datasetStats.candleSeries,0)],["当前占用仓位",fmt(result.capital.usedCapital)+" USDT"]];
+ const rows=[["数据下载耗时",fmt(timing.dataSeconds??0)+" 秒"],["信号扫描及组合回测耗时",fmt(timing.scanSeconds??0)+" 秒"],["总耗时",fmt(timing.totalSeconds??0)+" 秒"],["策略收益率（按初始资金）",fmt(r.totalReturnPct)+"%"],["总盈利（扣费后）",fmt(r.totalProfit)+" USDT"],["总亏损（扣费后）",fmt(r.totalLoss)+" USDT"],["净总盈亏（总盈利−总亏损）",fmt(r.netProfit)+" USDT"],["胜率",fmt(r.winRatePct)+"%"],["盈亏比",fmt(r.riskRewardRatio)],["最大回撤（按K线收盘价计浮动盈亏，剔除注资/提取）",fmt(r.maxDrawdownPct)+"%"],["有效交易",fmt(r.totalTrades,0)],["止盈次数",fmt(r.takeProfitCount,0)],["止损次数",fmt(r.stopLossCount,0)],["超时平仓",fmt(r.timeoutCloseCount,0)],["累计补充额度（名义）",fmt(r.totalCapitalReplenished)+" USDT"],["实际注入资金",fmt(result.capital.actualCashInjected)+" USDT"],["实际提取资金",fmt(result.capital.actualCashWithdrawn)+" USDT"],["资金费率过滤信号",fmt(result.scanStats.fundingFilteredSignals,0)],["历史费率缺失信号",fmt(result.scanStats.fundingRateUnavailableSignals,0)],["未完成/无法分类",fmt(r.incompleteTrades,0)],["未平仓交易",fmt(r.openTrades,0)],["缺失数据间隔",fmt(result.scanStats.missingIntervals,0)],["历史名单覆盖天数",fmt(result.datasetStats.dailyUniverseDays,0)+(result.datasetStats.dailyUniverseDaysExpected===null?"":" / "+fmt(result.datasetStats.dailyUniverseDaysExpected,0))],["缺失每日名单日期",fmt(result.datasetStats.missingUniverseDays,0)],["缺失/预热不足K线序列",fmt(result.datasetStats.missingSeriesCount,0)],["纳入交易对",fmt(result.datasetStats.symbolsIncluded,0)],["已检查合约",fmt(result.datasetStats.symbolsChecked,0)],["K线数据序列",fmt(result.datasetStats.candleSeries,0)],["当前占用仓位",fmt(result.capital.usedCapital)+" USDT"]];
  const trades=result.accepted.slice(0,30).map(t=>{
   const endTime=t.exitTime??t.asOfTime??null;
   const holding=fmtHoldingDuration(t.entryTime,endTime);
@@ -171,16 +171,20 @@ function showReport(result){
  $("report").innerHTML='<div class="metrics">'+rows.map(([a,b])=>'<div class="metric"><small>'+a+'</small><strong>'+b+'</strong></div>').join("")+'</div><p>扫描 '+result.scanStats.candlesEvaluated+' 根候选K线，发现 '+result.scanStats.signalsFound+' 个信号。可用余额：'+fmt(result.capital.availableBalance)+' USDT。</p>'+(limits?'<p>数据限制：'+limits+'</p>':"")+(trades?'<h3 style="font-size:13px">交易明细（最多30笔）</h3>'+trades:"");
 }
 async function run(){
+ const totalStarted=Date.now();let dataSeconds=0,scanSeconds=0;
  let s;try{s=validate()}catch(e){$("status").textContent=e.message;return}
  $("run").disabled=true;$("progress").style.width="0%";$("report").textContent="正在准备数据…";resetLive();
  try{
   const range=createBacktestRange(s.periodDays);
+  const dataStarted=Date.now();
   const dataset=await fetchBacktestDataset({...range,timeframes:s.timeframes,concurrency:3,onProgress:p=>{
    const stage=p.phase==="daily-universe"?"历史每日成交额名单":p.phase==="klines"?"下载历史K线":"下载历史资金费率";
    if(p.total){$("progress").style.width=Math.min(99,p.completed/p.total*100)+"%";$("status").textContent=stage+"："+p.completed+"/"+p.total+(p.symbol?" · "+p.symbol:"")}
   }});
+  dataSeconds=(Date.now()-dataStarted)/1000;
   $("progress").style.width="0%";
-  $("status").textContent="历史数据准备完成，正在扫描历史信号…";
+  $("status").textContent="历史数据准备完成（"+fmt(dataSeconds)+"秒），正在扫描历史信号…";
+  const scanStarted=Date.now();
   const result=await runHistoricalBacktest(dataset,{initialCapital:10000,maxOpenTrades:5,timeframes:s.timeframes,bodyThresholds:s.bodyThresholds,fundingFilterPct:Number(s.fundingFilterPct),tradeConfig:{
    entryMethod:s.entryMethod,retracementPct:s.retracementPct===""?undefined:Number(s.retracementPct),limitValidityBars:s.limitValidityBars===""?undefined:Number(s.limitValidityBars),
    hardStopPct:Number(s.hardStopPct),auxiliaryStop:s.auxiliaryStop,rr:Number(s.rr),positionNotional:Number(s.positionNotional),
@@ -202,12 +206,13 @@ async function run(){
     }
    }
   });
+  scanSeconds=(Date.now()-scanStarted)/1000;
   const closed=result.accepted.filter(t=>t.status==="closed").length;
   const opened=result.accepted.filter(t=>t.status==="open").length;
   $("closedCount").textContent=String(closed);$("openCount").textContent=String(opened);
   $("scannedCount").textContent=result.scanStats.symbolTimeframeSeries+" / "+(result.scanStats.totalSeriesCount||result.scanStats.symbolTimeframeSeries);
   $("signalCount").textContent=String(result.scanStats.signalsFound);
-  $("progress").style.width="100%";showReport(result);$("status").textContent="回测完成："+result.period.days+"天 · "+s.timeframes.join("、")+" · "+result.scanStats.signalsFound+"个信号。";
+  $("progress").style.width="100%";showReport(result,{dataSeconds,scanSeconds,totalSeconds:(Date.now()-totalStarted)/1000});$("status").textContent="回测完成："+result.period.days+"天 · "+s.timeframes.join("、")+" · "+result.scanStats.signalsFound+"个信号。数据下载 "+fmt(dataSeconds)+"秒，扫描回测 "+fmt(scanSeconds)+"秒。";
  }catch(e){$("status").textContent="回测失败："+(e?.message||"未知错误")+"。请检查网络后重试。";$("report").textContent="本次回测未完成。"}
  finally{$("run").disabled=false}
 }

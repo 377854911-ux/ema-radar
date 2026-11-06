@@ -56,8 +56,11 @@ export async function getFundingRateMap(symbols) {
   const wanted = new Set(symbols.map(item => item.symbol ?? item));
   return new Map((Array.isArray(rows) ? rows : [rows])
     .filter(row => wanted.has(row.symbol))
-    .map(row => [row.symbol, Number.isFinite(Number(row.lastFundingRate))
-      ? Number(row.lastFundingRate) : null]));
+    .map(row => [row.symbol,
+      row.lastFundingRate === null || row.lastFundingRate === undefined || row.lastFundingRate === ""
+        ? null
+        : (Number.isFinite(Number(row.lastFundingRate)) ? Number(row.lastFundingRate) : null)
+    ]));
 }
 
 export async function getKlines(symbol, interval, limit = 120) {

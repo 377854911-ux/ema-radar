@@ -42,6 +42,57 @@ test("live scanner excludes both positive and negative high funding rates before
   }
 });
 
+test("live EMA scanner seeds once, then fetches only candles since the cached close", async () => {
+  const originalFetch = globalThis.fetch;
+  const originalNow = Date.now;
+  const intervalMs = 15 * 60_000;
+  const currentOpenTime = Math.floor(originalNow() / intervalMs) * intervalMs;
+  const baseOpenTime = currentOpenTime - 501 * intervalMs;
+  let fakeNow = currentOpenTime + 1000;
+  const requests = [];
+  const candle = openTime => [
+    openTime, "100", "101", "99", "100", "0", openTime + intervalMs - 1, "0"
+  ];
+  const initial = Array.from({ length: 502 }, (_, i) => candle(baseOpenTime + i * intervalMs));
+  globalThis.fetch = async input => {
+    const url = new URL(input);
+    requests.push({
+      startTime: url.searchParams.get("startTime"),
+      limit: url.searchParams.get("limit")
+    });
+    if (!url.searchParams.has("startTime")) {
+      return { ok: true, json: async () => initial };
+    }
+    const start = Number(url.searchParams.get("startTime"));
+    if (start === currentOpenTime) {
+      return { ok: true, json: async () => [
+        candle(currentOpenTime), candle(currentOpenTime + intervalMs)
+      ] };
+    }
+    if (start === currentOpenTime + intervalMs) {
+      return { ok: true, json: async () => [candle(currentOpenTime + intervalMs)] };
+    }
+    throw new Error("Unexpected incremental startTime: " + start);
+  };
+  Date.now = () => fakeNow;
+  try {
+    await scanMarket({ symbols: ["CACHEUSDT"], timeframes: ["15m"], concurrency: 1 });
+    fakeNow = currentOpenTime + intervalMs + 1000;
+    await scanMarket({ symbols: ["CACHEUSDT"], timeframes: ["15m"], concurrency: 1 });
+    await scanMarket({ symbols: ["CACHEUSDT"], timeframes: ["15m"], concurrency: 1 });
+    assert.equal(requests.length, 3);
+    assert.equal(requests[0].limit, "502");
+    assert.equal(requests[0].startTime, null);
+    assert.equal(requests[1].startTime, String(currentOpenTime));
+    assert.equal(requests[1].limit, "4");
+    assert.equal(requests[2].startTime, String(currentOpenTime + intervalMs));
+    assert.equal(requests[2].limit, "3");
+  } finally {
+    globalThis.fetch = originalFetch;
+    Date.now = originalNow;
+  }
+});
+
 test("funding rate map reads Binance last settled rates for selected symbols", async () => {
   const originalFetch = globalThis.fetch;
   globalThis.fetch = async () => ({

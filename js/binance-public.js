@@ -96,6 +96,20 @@ function validLiveCandle(candle, intervalMs) {
     && candle.low <= Math.min(candle.open, candle.close);
 }
 
+async function fetchWarmupKlines(symbol, timeframe) {
+  const intervalMs = TIMEFRAME_MINUTES[timeframe] * 60_000;
+  // Binance charges lower request weight below a LIMIT of 500.
+  // Fetch 499 recent bars plus the 3 immediately preceding bars.
+  const recent = await getKlines(symbol, timeframe, EMA_WARMUP_BARS - 1);
+  if (!Array.isArray(recent) || recent.length === 0) return recent;
+  const firstOpenTime = normalizeLiveCandle(recent[0]).openTime;
+  if (!Number.isFinite(firstOpenTime)) return recent;
+  const earlier = await getKlines(
+    symbol, timeframe, 3, firstOpenTime - 3 * intervalMs
+  );
+  return Array.isArray(earlier) ? [...earlier, ...recent] : recent;
+}
+
 async function getLatestLiveSignal(symbol, timeframe, maxBodyPercent) {
   const key = symbol + "|" + timeframe;
   const intervalMs = TIMEFRAME_MINUTES[timeframe] * 60_000;
@@ -145,7 +159,7 @@ async function getLatestLiveSignal(symbol, timeframe, maxBodyPercent) {
   }
 
   // First scan, stale cache, or a detected gap: rebuild from a clean 500-bar window.
-  const candles = await getKlines(symbol, timeframe, EMA_WARMUP_BARS + 2);
+  const candles = await fetchWarmupKlines(symbol, timeframe);
   const analysis = analyzeLatestClosedSignal(candles, { timeframe, maxBodyPercent });
   if (analysis.emaValues && Array.isArray(candles) && candles.length >= EMA_WARMUP_BARS + 2) {
     const normalized = candles.slice(-(EMA_WARMUP_BARS + 2)).map(normalizeLiveCandle);
@@ -210,7 +224,8 @@ export async function scanMarket({
   let failures = 0;
   let fundingFiltered = 0;
   let fundingUnavailable = 0;
-  const results = await mapWithConcurrency(tasks, concurrency, async task => {
+  const effectiveConcurrency = validTimeframes.length >= 8 ? Math.min(concurrency, 2) : concurrency;
+  const results = await mapWithConcurrency(tasks, effectiveConcurrency, async task => {
     try {
       const symbol = task.symbol.symbol ?? task.symbol;
       if (thresholdPct > 0) {

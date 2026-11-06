@@ -163,7 +163,15 @@ export function simulateTrade({ candles, signalIndex, direction, config, funding
       break;
     }
     if (stopTouched) {
-      const rawStop = direction === "LONG" ? Math.min(...stopLevels.filter(level => c.low <= level)) : Math.max(...stopLevels.filter(level => c.high >= level));
+      const touchedStops = stopLevels.filter(level =>
+        direction === "LONG" ? c.low <= level : c.high >= level
+      );
+      const stopLevel = direction === "LONG" ? Math.min(...touchedStops) : Math.max(...touchedStops);
+      // If the candle opens beyond an active stop, the stop cannot fill at
+      // its trigger level. Use the worse opening price before applying slippage.
+      const rawStop = direction === "LONG"
+        ? Math.min(stopLevel, c.open)
+        : Math.max(stopLevel, c.open);
       exit = { index: i, reason: "stop_loss", rawPrice: rawStop, price: adversePrice(rawStop, direction, slippageRate, false), time: c.closeTime ?? c.openTime };
       break;
     }

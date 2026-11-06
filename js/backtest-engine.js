@@ -151,7 +151,7 @@ export function simulateTrade({ candles, signalIndex, direction, config, funding
       exit = { index: i, reason: "stop_loss", rawPrice: rawStop, price: adversePrice(rawStop, direction, slippageRate, false), time: c.closeTime ?? c.openTime };
       break;
     }
-    if (tpTouched) {
+    if (tpTouched && !(config.entryMethod === "retracement_limit" && i === entryIndex)) {
       exit = { index: i, reason: "take_profit", rawPrice: takeProfit, price: takeProfit, time: c.closeTime ?? c.openTime };
       break;
     }
@@ -167,7 +167,7 @@ export function simulateTrade({ candles, signalIndex, direction, config, funding
 
   if (!exit) return { status: "open", reason: "insufficient_future_candles", entryIndex, entryPrice, hardStop, auxiliaryStop, takeProfit };
 
-  const exitFee = fee(notional, config.exitFeeRate);
+  const exitNotional = notional * exit.price / entryPrice;\n  const exitFee = fee(exitNotional, config.exitFeeRate);
   const grossPnl = direction === "LONG"
     ? notional * (exit.price - entryPrice) / entryPrice
     : notional * (entryPrice - exit.price) / entryPrice;

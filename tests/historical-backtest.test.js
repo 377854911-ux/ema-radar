@@ -184,6 +184,24 @@ test("skips a series when its trailing historical candles are missing", async ()
   ));
 });
 
+test("a position left unresolved by a candle gap is incomplete, not an end-of-test open trade", async () => {
+  const dataset = makeDataset();
+  dataset.endTime = 509 * 900_000;
+  for (let i = 507; i < dataset.candlesBySymbolTimeframe["TESTUSDT|15m"].length; i++) {
+    dataset.candlesBySymbolTimeframe["TESTUSDT|15m"][i].openTime += 900_000;
+    dataset.candlesBySymbolTimeframe["TESTUSDT|15m"][i].closeTime += 900_000;
+  }
+  const result = await runHistoricalBacktest(dataset, {
+    timeframes: ["15m"], initialCapital: 10_000, maxOpenTrades: 5, tradeConfig
+  });
+  assert.equal(result.scanStats.signalsFound, 1);
+  assert.equal(result.accepted.length, 1);
+  assert.equal(result.accepted[0].status, "incomplete");
+  assert.equal(result.accepted[0].reason, "incomplete_candle_history_after_entry");
+  assert.equal(result.report.openTrades, 0);
+  assert.equal(result.report.incompleteTrades, 1);
+});
+
 test("reports positions that remain open at the end of the backtest window", async () => {
   const dataset = makeDataset();
   const entry = dataset.candlesBySymbolTimeframe["TESTUSDT|15m"][505].close;

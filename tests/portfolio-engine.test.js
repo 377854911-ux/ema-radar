@@ -124,8 +124,10 @@ test("consecutive-loss replenishment resets to base plus the scheduled bonus", (
   assert.equal(result.capital.cumulativeTopUps, 3_010);
   assert.equal(result.capital.actualCashInjected, 2_020);
   assert.equal(result.capital.accountBalance, 12_000);
-  // The trough before each replenishment must remain visible in drawdown.
-  assert.ok(Math.abs(result.summary.maxDrawdownPct - 0.1) < 1e-9);
+  // External replenishments do not reset the strategy-equity peak.
+  assert.ok(Math.abs(result.summary.maxDrawdownPct - 0.2) < 1e-9);
+  assert.equal(result.capital.actualCashWithdrawn, 0);
+  assert.equal(result.summary.maxDrawdownBasis, "flow_adjusted_mark_to_market_equity");
 });
 
 test("portfolio skips a trade when its fixed notional exceeds available funds", () => {
@@ -215,6 +217,50 @@ test("realized net profit, fee deductions, funding and account balance reconcile
   assert.equal(result.capital.events.some(event => event.type === "closed_position_funding" && event.time === 15), true);
 });
 
+
+test("open-position unrealized loss is included in flow-adjusted maximum drawdown", () => {
+  const candles = [
+    { openTime: 0, closeTime: 9, open: 98, high: 101, low: 97, close: 100 },
+    { openTime: 10, closeTime: 19, open: 100, high: 100.5, low: 98.5, close: 99 },
+    { openTime: 20, closeTime: 29, open: 99, high: 99.5, low: 98.5, close: 99 }
+  ];
+  const result = simulatePortfolio([{
+    symbol: "UNREALIZEDLOSSUSDT",
+    timeframe: "1h",
+    direction: "LONG",
+    distanceRate: 0.1,
+    candles,
+    signalIndex: 0,
+    config
+  }]);
+
+  assert.equal(result.accepted[0].status, "open");
+  assert.ok(Math.abs(result.summary.maxDrawdownPct - 0.05) < 1e-9);
+  assert.equal(result.summary.maxDrawdownBasis, "flow_adjusted_mark_to_market_equity");
+});
+
+test("external replenishment is excluded from equity growth and drawdown peaks", () => {
+  function losingCandles(start) {
+    return [
+      { openTime: start, closeTime: start + 9, open: 98, high: 101, low: 97, close: 100 },
+      { openTime: start + 10, closeTime: start + 19, open: 100, high: 101, low: 97, close: 99 },
+      { openTime: start + 20, closeTime: start + 29, open: 99, high: 100, low: 98, close: 99 }
+    ];
+  }
+  const result = simulatePortfolio([
+    { symbol: "DEPOSIT_AUSDT", timeframe: "1h", direction: "LONG", distanceRate: 0.1, candles: losingCandles(0), signalIndex: 0, config },
+    { symbol: "DEPOSIT_BUSDT", timeframe: "1h", direction: "LONG", distanceRate: 0.1, candles: losingCandles(30), signalIndex: 0, config }
+  ]);
+
+  assert.equal(result.capital.actualCashInjected, 2_020);
+  assert.equal(result.capital.actualCashWithdrawn, 0);
+  assert.equal(result.capital.accountBalance, 12_000);
+  assert.ok(Math.abs(result.summary.maxDrawdownPct - 0.2) < 1e-9);
+  const lastPoint = result.equityCurve.at(-1);
+  assert.equal(lastPoint.cashBalance, 12_000);
+  assert.equal(lastPoint.netExternalFlows, 2_020);
+  assert.equal(lastPoint.adjustedEquity, 9_980);
+});
 
 test("drawdown is unknown when a funding-incomplete trade breaks cash accounting", () => {
   const candles = longCandles();

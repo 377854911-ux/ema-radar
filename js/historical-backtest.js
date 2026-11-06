@@ -1,13 +1,9 @@
-import { analyzeLatestClosedSignal } from "./ema-engine.js";
+import { calculateEMA } from "./ema-engine.js";
 import { simulatePortfolio } from "./portfolio-engine.js";
 
 export const BACKTEST_PERIOD_DAYS = Object.freeze([7, 30, 60]);
 const DAY_MS = 86_400_000;
 
-/**
- * Convert a selected rolling period into a UTC-aligned range.
- * endTime is exclusive; callers should normally pass the latest completed UTC day.
- */
 export function createBacktestRange(days, endTime = Date.now()) {
   if (!BACKTEST_PERIOD_DAYS.includes(days)) {
     throw new RangeError("Backtest period must be 7, 30, or 60 days");
@@ -21,6 +17,91 @@ export function createBacktestRange(days, endTime = Date.now()) {
 
 function dayStart(timestamp) {
   return Math.floor(timestamp / DAY_MS) * DAY_MS;
+}
+
+function readCandle(raw) {
+  if (Array.isArray(raw)) {
+    return {
+      openTime: Number(raw[0]), open: Number(raw[1]), high: Number(raw[2]),
+      low: Number(raw[3]), close: Number(raw[4]), closeTime: Number(raw[6])
+    };
+  }
+  return {
+    openTime: Number(raw?.openTime), open: Number(raw?.open),
+    high: Number(raw?.high), low: Number(raw?.low),
+    close: Number(raw?.close), closeTime: Number(raw?.closeTime)
+  };
+}
+
+function validCandle(c) {
+  return [c.open, c.high, c.low, c.close].every(Number.isFinite)
+    && c.open > 0 && c.low > 0
+    && c.high >= Math.max(c.open, c.close)
+    && c.low <= Math.min(c.open, c.close);
+}
+
+/**
+ * Calculate each EMA series once, then inspect candles in linear time.
+ * Values at index i only depend on closes up to i, so no future data leaks in.
+ */
+function findSignalsForSeries({ symbol, timeframe, rawCandles, dataset, settings, tradeConfig }) {
+  const candles = rawCandles.map(readCandle);
+  if (candles.length < 102) return [];
+  const closes = candles.map(c => c.close);
+  const ema25 = calculateEMA(closes, 25);
+  const ema50 = calculateEMA(closes, 50);
+  const ema100 = calculateEMA(closes, 100);
+  const signals = [];
+  const maxBodyPercent = settings.maxBodyPercent;
+
+  for (let i = 100; i < candles.length - 1; i++) {
+    const signalCandle = candles[i];
+    const nextCandle = candles[i + 1];
+    const timestamp = signalCandle.openTime;
+    if (!Number.isFinite(timestamp)
+        || timestamp < dataset.startTime || timestamp >= dataset.endTime) continue;
+
+    const day = dayStart(timestamp);
+    const dailyRows = dataset.dailyUniverse[String(day)] ?? dataset.dailyUniverse[day] ?? [];
+    if (!dailyRows.some(row => row.symbol === symbol)) continue;
+    if (!validCandle(signalCandle) || !validCandle(nextCandle)) continue;
+
+    const values = [ema25[i], ema50[i], ema100[i]];
+    if (!values.every(Number.isFinite)) continue;
+    const bodyPercent = Math.abs(signalCandle.close - signalCandle.open)
+      / signalCandle.open * 100;
+    if (maxBodyPercent !== null && maxBodyPercent !== undefined) {
+      const threshold = Number(maxBodyPercent);
+      if (!Number.isFinite(threshold) || threshold <= 0 || bodyPercent >= threshold) continue;
+    }
+
+    const bullish = signalCandle.close > signalCandle.open;
+    const bearish = signalCandle.close < signalCandle.open;
+    const allInsideBullBody = bullish
+      && values.every(value => value > signalCandle.open && value < signalCandle.close);
+    const allInsideBearBody = bearish
+      && values.every(value => value < signalCandle.open && value > signalCandle.close);
+    let direction = null;
+    if (allInsideBullBody && ema100[i] < ema25[i] && ema100[i] < ema50[i]) {
+      direction = "LONG";
+    } else if (allInsideBearBody && ema100[i] > ema25[i] && ema100[i] > ema50[i]) {
+      direction = "SHORT";
+    }
+    if (!direction) continue;
+
+    const distanceRate = (Math.max(...values) - Math.min(...values))
+      / signalCandle.close * 100;
+    signals.push({
+      symbol,
+      timeframe,
+      direction,
+      distanceRate,
+      candles: rawCandles,
+      signalIndex: i,
+      config: tradeConfig
+    });
+  }
+  return signals;
 }
 
 function validateDataset(dataset) {
@@ -39,16 +120,17 @@ function timeframeConfig(config, timeframe) {
   const maxBodyPercent = override.maxBodyPercent
     ?? config.maxBodyPercentByTimeframe?.[timeframe]
     ?? null;
-  return { ...config.tradeConfig, ...override.tradeConfig, maxBodyPercent };
+  return {
+    ...config.tradeConfig,
+    ...override.tradeConfig,
+    maxBodyPercent
+  };
 }
 
 /**
  * Runs the historical EMA signal scan and hands fresh candidates to the
- * portfolio simulator. The final candle in each scan slice is treated as
- * the next candle after the signal, so only a newly closed signal candle
- * can qualify; old signals are never carried forward.
- *
- * Dataset format is the output of fetchBacktestDataset().
+ * portfolio simulator. A signal is considered only when its following candle
+ * exists; the signal candle itself must already be closed.
  */
 export function runHistoricalBacktest(dataset, config = {}, options = {}) {
   validateDataset(dataset);
@@ -70,7 +152,6 @@ export function runHistoricalBacktest(dataset, config = {}, options = {}) {
   const scanStats = {
     symbolTimeframeSeries: 0,
     candlesEvaluated: 0,
-    eligibleUniverseCandles: 0,
     signalsFound: 0,
     missingSeries: []
   };
@@ -78,48 +159,26 @@ export function runHistoricalBacktest(dataset, config = {}, options = {}) {
 
   for (const timeframe of selectedTimeframes) {
     const settings = timeframeConfig(config, timeframe);
+    let timeframeSignals = 0;
     for (const [key, candles] of seriesEntries) {
       const separator = key.lastIndexOf("|");
       const symbol = key.slice(0, separator);
       const seriesTimeframe = key.slice(separator + 1);
       if (seriesTimeframe !== timeframe) continue;
       scanStats.symbolTimeframeSeries++;
-      if (!Array.isArray(candles) || candles.length < 102) continue;
-
-      // Index 0..99 is EMA warm-up. The last item in each slice is the
-      // following candle, which prevents an unclosed candle from confirming.
-      for (let signalIndex = 100; signalIndex < candles.length - 1; signalIndex++) {
-        const signalCandle = candles[signalIndex];
-        const timestamp = Number(signalCandle.openTime);
-        if (!Number.isFinite(timestamp)
-            || timestamp < dataset.startTime || timestamp >= dataset.endTime) continue;
-
-        const day = dayStart(timestamp);
-        const dailyRows = dataset.dailyUniverse[String(day)] ?? dataset.dailyUniverse[day] ?? [];
-        if (!dailyRows.some(row => row.symbol === symbol)) continue;
-        scanStats.eligibleUniverseCandles++;
-        scanStats.candlesEvaluated++;
-
-        const result = analyzeLatestClosedSignal(candles.slice(0, signalIndex + 2), {
-          timeframe,
-          maxBodyPercent: settings.maxBodyPercent
-        });
-        if (!result.signal) continue;
-
-        const fundingEvents = dataset.fundingBySymbol?.[symbol] ?? [];
-        candidates.push({
-          symbol,
-          timeframe,
-          direction: result.signal.direction,
-          distanceRate: result.signal.distanceRate,
-          candles,
-          signalIndex,
-          config: { ...config.tradeConfig, ...settings.tradeConfig },
-          fundingEvents
-        });
-        scanStats.signalsFound++;
+      if (!Array.isArray(candles) || candles.length < 102) {
+        scanStats.missingSeries.push({ symbol, timeframe, reason: "insufficient_candles" });
+        continue;
       }
+      const tradeConfig = { ...config.tradeConfig, ...settings.tradeConfig };
+      const found = findSignalsForSeries({
+        symbol, timeframe, rawCandles: candles, dataset, settings, tradeConfig
+      });
+      candidates.push(...found);
+      timeframeSignals += found.length;
+      scanStats.candlesEvaluated += Math.max(0, candles.length - 101);
     }
+    scanStats.signalsFound += timeframeSignals;
     options.onProgress?.({
       phase: "signal-scan",
       timeframe,
@@ -129,15 +188,17 @@ export function runHistoricalBacktest(dataset, config = {}, options = {}) {
     });
   }
 
-  const portfolio = simulatePortfolio(candidates, {
-    initialCapital,
-    maxOpenTrades
-  });
+  const fundingBySymbol = dataset.fundingBySymbol ?? {};
+  for (const candidate of candidates) {
+    candidate.fundingEvents = fundingBySymbol[candidate.symbol] ?? [];
+  }
+  const portfolio = simulatePortfolio(candidates, { initialCapital, maxOpenTrades });
   const incompleteOrUnclassifiable = [
     ...portfolio.accepted.filter(trade =>
       trade.status === "incomplete" || trade.status === "unclassifiable"
     ),
-    ...portfolio.skipped.filter(item => item.trade?.status === "unclassifiable").map(item => item.trade)
+    ...portfolio.skipped.filter(item => item.trade?.status === "unclassifiable")
+      .map(item => item.trade)
   ];
 
   return {

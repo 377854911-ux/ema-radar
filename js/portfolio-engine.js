@@ -102,6 +102,17 @@ export function simulatePortfolio(candidates, options = {}) {
       // Entry fee was deducted when the position opened. Settle gross PnL,
       // exit fee and known funding now; the combined lifetime change equals netPnl.
       accountBalance += item.trade.grossPnl - item.trade.exitFee + item.trade.fundingPnl;
+      if (item.trade.exitReason === "ambiguous_both_touched") {
+        // A same-candle TP/SL collision is neutral for win/loss streaks.
+        capitalEvents.push({
+          time: item.trade.exitTime,
+          symbol: item.candidate.symbol,
+          type: "ambiguous_trade",
+          netPnl: item.trade.netPnl,
+          lossStreak
+        });
+        continue;
+      }
       if (item.trade.netPnl < 0) {
         lossStreak += 1;
         const bonusPct = Math.min(lossStreak, 5) * 10;

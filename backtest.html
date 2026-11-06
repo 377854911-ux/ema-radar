@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0b1220">
+<title>EMA 雷达 · 历史回测</title>
+<style>
+:root{color-scheme:dark;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:#0b1220;color:#edf3fb}
+*{box-sizing:border-box}body{margin:0;padding:env(safe-area-inset-top) 14px env(safe-area-inset-bottom);background:linear-gradient(160deg,#14233a,#0b1220 48%);min-height:100vh}
+main{width:min(100%,760px);margin:auto;padding:18px 0 40px}header{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;gap:10px}
+h1{font-size:21px;margin:0}h2{font-size:15px;margin:0 0 12px}.sub,.note,.status{font-size:12px;color:#94a8c0;line-height:1.55}
+a{color:#9fc2ff;text-decoration:none}.panel{background:#111d2d;border:1px solid #263a53;border-radius:16px;padding:14px;margin:12px 0}
+.row{display:grid;grid-template-columns:1fr 125px;gap:10px;align-items:center;margin:9px 0}.row label{font-size:13px;color:#d2deec}
+input[type=number],select{width:100%;background:#0b1625;border:1px solid #344a65;border-radius:9px;color:#edf3fb;padding:10px;font-size:14px}
+.grid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:7px;margin:9px 0}.tf{display:flex;align-items:center;justify-content:center;gap:4px;background:#17283d;border:1px solid #2c425d;border-radius:9px;padding:9px 2px;font-size:12px}.tf input{margin:0;accent-color:#78aef0}
+button{border:0;border-radius:11px;padding:12px 14px;font-weight:700;font-size:14px;background:#3678c8;color:white}.secondary{background:#263b55;color:#d9e7f7}.actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}button:disabled{opacity:.5}
+hr{border:0;border-top:1px solid #263a53;margin:14px 0}.progress{height:7px;background:#26384e;border-radius:20px;overflow:hidden;margin:10px 0}.progress i{display:block;height:100%;width:0;background:#69a5ed}
+.metrics{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-top:12px}.metric{background:#17283d;border:1px solid #2c425d;border-radius:11px;padding:10px}.metric small{display:block;color:#91a6c0;font-size:11px;margin-bottom:5px}.metric strong{font-size:16px;overflow-wrap:anywhere}
+.trade{font-size:11px;color:#b4c5d8;padding:8px 0;border-bottom:1px solid #263a53}.foot{font-size:11px;color:#71859e;text-align:center;line-height:1.6;padding:12px}
+@media(max-width:390px){.grid{grid-template-columns:repeat(4,minmax(0,1fr))}.row{grid-template-columns:1fr 112px}}
+</style>
+</head>
+<body>
+<main>
+<header><div><h1>历史回测</h1><div class="sub">EMA25 / EMA50 / EMA100 · BINANCE USDⓈ-M PUBLIC DATA</div></div><a href="./">返回雷达</a></header>
+<section class="panel">
+<h2>回测范围</h2>
+<div class="row"><label for="period">回测周期</label><select id="period"><option value="7">最近 7 天</option><option value="30">最近 30 天</option><option value="60">最近 60 天</option></select></div>
+<div class="note">选择需要回测的周期，可多选；每个历史交易日都按当日成交额前100筛选。</div>
+<div id="timeframes" class="grid">
+<label class="tf"><input type="checkbox" value="10m" >10m</label><label class="tf"><input type="checkbox" value="15m" checked>15m</label><label class="tf"><input type="checkbox" value="30m" >30m</label><label class="tf"><input type="checkbox" value="1h" >1h</label><label class="tf"><input type="checkbox" value="2h" >2h</label><label class="tf"><input type="checkbox" value="4h" >4h</label><label class="tf"><input type="checkbox" value="6h" >6h</label><label class="tf"><input type="checkbox" value="8h" >8h</label><label class="tf"><input type="checkbox" value="12h" >12h</label><label class="tf"><input type="checkbox" value="1d" >1d</label>
+</div>
+</section>
+<section class="panel">
+<h2>入场与风险设置</h2>
+<div class="row"><label for="entryMethod">入场方式</label><select id="entryMethod"><option value="">请选择</option><option value="signal_close">信号K线收盘价</option><option value="next_open">下一根K线开盘价</option><option value="retracement_limit">信号实体回撤限价</option></select></div>
+<div class="row"><label for="retracementPct">回撤比例（限价）</label><input id="retracementPct" type="number" min="1" max="50" step="1" placeholder="1–50%"></div>
+<div class="row"><label for="limitValidityBars">限价有效K线数</label><input id="limitValidityBars" type="number" min="1" step="1" placeholder="请输入"></div>
+<div class="row"><label for="positionNotional">每笔仓位总价值（USDT）</label><input id="positionNotional" type="number" min="0.01" step="any" placeholder="请输入"></div>
+<div class="row"><label for="hardStopPct">硬止损（1–20%，整数）</label><input id="hardStopPct" type="number" min="1" max="20" step="1" placeholder="请输入"></div>
+<div class="row"><label for="auxiliaryStop">辅助止损方式</label><select id="auxiliaryStop"><option value="">请选择</option><option value="signal_extreme">信号K线最低/最高价</option><option value="signal_open">信号K线开盘价</option></select></div>
+<div class="row"><label for="rr">盈亏比（风险:收益）</label><select id="rr"><option value="">请选择</option><option value="1.0">1.0 : 1</option><option value="1.1">1.1 : 1</option><option value="1.2">1.2 : 1</option><option value="1.3">1.3 : 1</option><option value="1.4">1.4 : 1</option><option value="1.5">1.5 : 1</option><option value="1.6">1.6 : 1</option><option value="1.7">1.7 : 1</option><option value="1.8">1.8 : 1</option><option value="1.9">1.9 : 1</option><option value="2.0">2.0 : 1</option><option value="2.1">2.1 : 1</option><option value="2.2">2.2 : 1</option><option value="2.3">2.3 : 1</option><option value="2.4">2.4 : 1</option><option value="2.5">2.5 : 1</option><option value="2.6">2.6 : 1</option><option value="2.7">2.7 : 1</option><option value="2.8">2.8 : 1</option><option value="2.9">2.9 : 1</option><option value="3.0">3.0 : 1</option><option value="3.1">3.1 : 1</option><option value="3.2">3.2 : 1</option><option value="3.3">3.3 : 1</option><option value="3.4">3.4 : 1</option><option value="3.5">3.5 : 1</option><option value="3.6">3.6 : 1</option><option value="3.7">3.7 : 1</option><option value="3.8">3.8 : 1</option><option value="3.9">3.9 : 1</option><option value="4.0">4.0 : 1</option><option value="4.1">4.1 : 1</option><option value="4.2">4.2 : 1</option><option value="4.3">4.3 : 1</option><option value="4.4">4.4 : 1</option><option value="4.5">4.5 : 1</option><option value="4.6">4.6 : 1</option><option value="4.7">4.7 : 1</option><option value="4.8">4.8 : 1</option><option value="4.9">4.9 : 1</option><option value="5.0">5.0 : 1</option></select></div>
+<div class="row"><label for="timeoutBars">超时平仓（可选）</label><select id="timeoutBars"><option value="">不启用</option><option value="1">1 根K线</option><option value="2">2 根K线</option><option value="3">3 根K线</option><option value="4">4 根K线</option><option value="5">5 根K线</option><option value="6">6 根K线</option><option value="7">7 根K线</option><option value="8">8 根K线</option><option value="9">9 根K线</option></select></div>
+</section>
+<section class="panel">
+<h2>交易成本</h2>
+<div class="note">所有费率和滑点都需要你明确填写，不会擅自按 0 计算。单位为百分比，例如 0.05 代表 0.05%。</div>
+<div class="row"><label for="entryFeeRate">入场手续费 (%)</label><input id="entryFeeRate" type="number" min="0" step="any" placeholder="请输入"></div>
+<div class="row"><label for="exitFeeRate">出场手续费 (%)</label><input id="exitFeeRate" type="number" min="0" step="any" placeholder="请输入"></div>
+<div class="row"><label for="entrySlippageRate">入场滑点 (%)</label><input id="entrySlippageRate" type="number" min="0" step="any" placeholder="请输入"></div>
+<div class="row"><label for="slippageRate">止损/超时出场滑点 (%)</label><input id="slippageRate" type="number" min="0" step="any" placeholder="请输入"></div>
+<hr><div class="note">每个周期可单独设置 EMA 信号K线实体阈值；留空表示不启用。</div>
+<div id="thresholds"></div>
+<div class="note">初始资金：10,000 USDT（固定） · 最大同时持仓：5 笔</div>
+<div class="actions"><button id="save" class="secondary">保存回测设置</button><button id="run">开始回测</button></div>
+<div id="saveStatus" class="status"></div><div class="progress"><i id="progress"></i></div><div id="status" class="status">等待回测。请先填写风险参数和交易成本。</div>
+</section>
+<section class="panel"><h2>回测报告</h2><div id="report" class="note">完成回测后显示结果。</div></section>
+<div class="foot">仅使用币安 USDⓈ-M 公共行情，不连接钱包、不读取账户、不下单。历史行情保存在本机浏览器；iPhone 页面关闭或锁屏后，回测不会继续运行。</div>
+</main>
+<script type="module">
+import { fetchBacktestDataset } from "./js/historical-data.js";
+import { createBacktestRange, runHistoricalBacktest } from "./js/historical-backtest.js";
+const KEY="ema-radar-v1-backtest-settings";
+const TFS=["10m","15m","30m","1h","2h","4h","6h","8h","12h","1d"];
+const DEFAULTS={periodDays:7,timeframes:["15m"],entryMethod:"",retracementPct:"",limitValidityBars:"",positionNotional:"",hardStopPct:"",auxiliaryStop:"",rr:"",timeoutBars:"",entryFeeRate:"",exitFeeRate:"",entrySlippageRate:"",slippageRate:"",bodyThresholds:{}};
+const $=id=>document.getElementById(id);
+let settings=load();
+function load(){try{return {...DEFAULTS,...JSON.parse(localStorage.getItem(KEY)||"{}")}}catch{return {...DEFAULTS}}}
+function render(){
+ $("period").value=String(settings.periodDays||7);
+ $("timeframes").querySelectorAll("input").forEach(x=>x.checked=settings.timeframes.includes(x.value));
+ for(const id of ["entryMethod","retracementPct","limitValidityBars","positionNotional","hardStopPct","auxiliaryStop","rr","timeoutBars","entryFeeRate","exitFeeRate","entrySlippageRate","slippageRate"]) $(id).value=settings[id]??"";
+ $("thresholds").innerHTML=TFS.map(tf=>'<div class="row"><label for="threshold-'+tf+'">'+tf+' 实体阈值 (%)</label><input id="threshold-'+tf+'" type="number" min="0.01" step="0.01" placeholder="不限制" value="'+(settings.bodyThresholds?.[tf]??"")+'"></div>').join("");
+}
+function read(){
+ settings.periodDays=Number($("period").value);
+ settings.timeframes=[...$("timeframes").querySelectorAll("input:checked")].map(x=>x.value);
+ for(const id of ["entryMethod","retracementPct","limitValidityBars","positionNotional","hardStopPct","auxiliaryStop","rr","timeoutBars","entryFeeRate","exitFeeRate","entrySlippageRate","slippageRate"]) settings[id]=$(id).value;
+ settings.bodyThresholds={};
+ for(const tf of TFS){const v=$("threshold-"+tf).value.trim();if(v!=="")settings.bodyThresholds[tf]=Number(v)}
+}
+function save(){read();localStorage.setItem(KEY,JSON.stringify(settings));$("saveStatus").textContent="回测设置已保存在这台设备。"}
+function validate(){
+ read();const s=settings;
+ if(!s.timeframes.length)throw Error("请至少选择一个回测周期。");
+ if(!["signal_close","next_open","retracement_limit"].includes(s.entryMethod))throw Error("请选择入场方式。");
+ if(!(Number(s.positionNotional)>0))throw Error("请输入每笔仓位总价值。");
+ if(!Number.isInteger(Number(s.hardStopPct))||Number(s.hardStopPct)<1||Number(s.hardStopPct)>20)throw Error("硬止损必须是1–20的整数。");
+ if(!["signal_extreme","signal_open"].includes(s.auxiliaryStop))throw Error("请选择辅助止损方式。");
+ const rr=Number(s.rr);if(!Number.isFinite(rr)||rr<1||rr>5||Math.abs(rr*10-Math.round(rr*10))>1e-8)throw Error("请选择1.0–5.0的盈亏比。");
+ for(const [label,v] of [["入场手续费",s.entryFeeRate],["出场手续费",s.exitFeeRate],["入场滑点",s.entrySlippageRate],["出场滑点",s.slippageRate]])if(v===""||!Number.isFinite(Number(v))||Number(v)<0)throw Error("请填写"+label+"，不可留空或小于0。");
+ if(s.entryMethod==="retracement_limit"&&(!Number.isInteger(Number(s.retracementPct))||Number(s.retracementPct)<1||Number(s.retracementPct)>50))throw Error("限价回撤比例必须为1–50的整数。");
+ if(s.entryMethod==="retracement_limit"&&(!Number.isInteger(Number(s.limitValidityBars))||Number(s.limitValidityBars)<1))throw Error("请输入限价单有效K线数。");
+ for(const [tf,v] of Object.entries(s.bodyThresholds))if(!Number.isFinite(v)||v<=0)throw Error(tf+"实体阈值必须大于0。");
+ return s;
+}
+function fmt(v,d=2){return v===null||v===undefined||!Number.isFinite(Number(v))?"—":Number(v).toLocaleString("en-US",{maximumFractionDigits:d})}
+function showReport(result){
+ const r=result.report;
+ const rows=[["总收益率",fmt(r.totalReturnPct)+"%"],["净利润",fmt(r.netProfit)+" USDT"],["胜率",fmt(r.winRatePct)+"%"],["盈亏比",fmt(r.riskRewardRatio)],["最大回撤",fmt(r.maxDrawdownPct)+"%"],["有效交易",fmt(r.totalTrades,0)],["止盈次数",fmt(r.takeProfitCount,0)],["止损次数",fmt(r.stopLossCount,0)],["超时平仓",fmt(r.timeoutCloseCount,0)],["累计补充资金",fmt(r.totalCapitalReplenished)+" USDT"],["未完成/无法分类",fmt(r.incompleteTrades,0)],["当前占用仓位",fmt(result.capital.usedCapital)+" USDT"]];
+ const trades=result.accepted.slice(0,30).map(t=>'<div class="trade">'+t.symbol+' · '+t.timeframe+' · '+t.direction+' · '+(t.exitReason||t.status)+' · '+(t.netPnl==null?"盈亏待定":fmt(t.netPnl)+" USDT")+'</div>').join("");
+ const limits=(result.dataLimitations||[]).map(x=>'<div>• '+x+'</div>').join("");
+ $("report").innerHTML='<div class="metrics">'+rows.map(([a,b])=>'<div class="metric"><small>'+a+'</small><strong>'+b+'</strong></div>').join("")+'</div><p>扫描 '+result.scanStats.candlesEvaluated+' 根候选K线，发现 '+result.scanStats.signalsFound+' 个信号。可用余额：'+fmt(result.capital.availableBalance)+' USDT。</p>'+(limits?'<p>数据限制：'+limits+'</p>':"")+(trades?'<h3 style="font-size:13px">交易明细（最多30笔）</h3>'+trades:"");
+}
+async function run(){
+ let s;try{s=validate()}catch(e){$("status").textContent=e.message;return}
+ $("run").disabled=true;$("progress").style.width="0%";$("report").textContent="正在准备数据…";
+ try{
+  const range=createBacktestRange(s.periodDays);
+  const dataset=await fetchBacktestDataset({...range,timeframes:s.timeframes,concurrency:4,onProgress:p=>{
+   const stage=p.phase==="daily-universe"?"历史每日成交额名单":p.phase==="klines"?"下载历史K线":"下载历史资金费率";
+   if(p.total){$("progress").style.width=Math.min(99,p.completed/p.total*100)+"%";$("status").textContent=stage+"："+p.completed+"/"+p.total+(p.symbol?" · "+p.symbol:"")}
+  }});
+  $("status").textContent="历史数据准备完成，正在模拟交易…";
+  const result=runHistoricalBacktest(dataset,{initialCapital:10000,maxOpenTrades:5,timeframes:s.timeframes,bodyThresholds:s.bodyThresholds,tradeConfig:{
+   entryMethod:s.entryMethod,retracementPct:s.retracementPct===""?undefined:Number(s.retracementPct),limitValidityBars:s.limitValidityBars===""?undefined:Number(s.limitValidityBars),
+   hardStopPct:Number(s.hardStopPct),auxiliaryStop:s.auxiliaryStop,rr:Number(s.rr),positionNotional:Number(s.positionNotional),
+   entryFeeRate:Number(s.entryFeeRate),exitFeeRate:Number(s.exitFeeRate),entrySlippageRate:Number(s.entrySlippageRate),slippageRate:Number(s.slippageRate),
+   timeoutBars:s.timeoutBars===""?null:Number(s.timeoutBars)
+  },timeframeSettings:Object.fromEntries(s.timeframes.map(tf=>[tf,{maxBodyPercent:s.bodyThresholds[tf]??null}]))});
+  $("progress").style.width="100%";showReport(result);$("status").textContent="回测完成："+result.period.days+"天 · "+s.timeframes.join("、")+" · "+result.scanStats.signalsFound+"个信号。";
+ }catch(e){$("status").textContent="回测失败："+(e?.message||"未知错误")+"。请检查网络后重试。";$("report").textContent="本次回测未完成。"}
+ finally{$("run").disabled=false}
+}
+$("save").addEventListener("click",save);$("run").addEventListener("click",run);render();
+</script>
+</body></html>

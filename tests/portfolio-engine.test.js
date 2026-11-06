@@ -102,7 +102,7 @@ test("an opposite signal is discarded while an existing position is open", () =>
     { symbol: "AAAUSDT", timeframe: "1h", direction: "SHORT", distanceRate: 0.1, candles: bearish, signalIndex: 1, config }
   ]);
   assert.equal(result.accepted.length, 1);
-  assert.equal(result.skipped.some(x => x.reason === "opposite_position_open_at_signal"), true);
+  assert.equal(result.skipped.some(x => x.reason === "symbol_already_has_open_position"), true);
 });
 
 
@@ -530,12 +530,33 @@ test("same symbol can hold multiple same-direction positions from different sign
     { symbol: "REENTRYUSDT", timeframe: "1h", direction: "LONG", distanceRate: 0.1, candles: secondCandles, signalIndex: 1, config }
   ];
 
-  const allowed = simulatePortfolio(candidates, { maxOpenTrades: 2 });
-  assert.equal(allowed.accepted.length, 2);
-  assert.deepEqual(allowed.accepted.map(trade => trade.entryTime), [10, 20]);
-  assert.equal(allowed.accepted.every(trade => trade.symbol === "REENTRYUSDT" && trade.direction === "LONG"), true);
+  const result = simulatePortfolio(candidates, { maxOpenTrades: 2 });
+  assert.equal(result.accepted.length, 1);
+  assert.equal(result.accepted[0].entryTime, 10);
+  assert.equal(result.skipped.some(item => item.reason === "symbol_already_has_open_position"), true);
+});
 
-  const capped = simulatePortfolio(candidates, { maxOpenTrades: 1 });
-  assert.equal(capped.accepted.length, 1);
-  assert.equal(capped.skipped.some(item => item.reason === "max_open_trades_reached"), true);
+
+test("same symbol may be entered again after its previous position has closed", () => {
+  const firstCandles = [
+    { openTime: 0, closeTime: 9, open: 98, high: 101, low: 97, close: 100 },
+    { openTime: 10, closeTime: 19, open: 100, high: 103, low: 99, close: 102 },
+    { openTime: 20, closeTime: 29, open: 102, high: 103, low: 101, close: 102 }
+  ];
+  const secondCandles = [
+    { openTime: 0, closeTime: 9, open: 98, high: 101, low: 97, close: 100 },
+    { openTime: 10, closeTime: 19, open: 100, high: 101, low: 99, close: 100 },
+    { openTime: 20, closeTime: 29, open: 98, high: 101, low: 97, close: 100 },
+    { openTime: 30, closeTime: 39, open: 100, high: 101, low: 99, close: 100 },
+    { openTime: 40, closeTime: 49, open: 100, high: 103, low: 99, close: 102 }
+  ];
+  const result = simulatePortfolio([
+    { symbol: "REENTRYUSDT", timeframe: "1h", direction: "LONG", distanceRate: 0.1, candles: firstCandles, signalIndex: 0, config },
+    { symbol: "REENTRYUSDT", timeframe: "1h", direction: "LONG", distanceRate: 0.1, candles: secondCandles, signalIndex: 2, config }
+  ], { maxOpenTrades: 2 });
+
+  assert.equal(result.accepted.length, 2);
+  assert.deepEqual(result.accepted.map(trade => trade.entryTime), [10, 30]);
+  assert.equal(result.accepted[0].exitTime, 19);
+  assert.equal(result.skipped.some(item => item.reason === "symbol_already_has_open_position"), false);
 });

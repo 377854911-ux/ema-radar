@@ -74,7 +74,7 @@ export function simulatePortfolio(candidates, options = {}) {
   const settled = new Set();
   let accountBalance = initialCapital;
   let usedCapital = 0;
-  let cumulativeTopUps = 0;
+  let cumulativeTopUps = 0;\n  let actualCashInjected = 0;
   let lossStreak = 0;
   let capitalAccountingComplete = true;
   const capitalEvents = [];
@@ -104,19 +104,27 @@ export function simulatePortfolio(candidates, options = {}) {
       if (item.trade.netPnl < 0) {
         lossStreak += 1;
         const bonusPct = Math.min(lossStreak, 5) * 10;
-        const restoreAmount = Math.max(0, initialCapital - accountBalance);
+        const restoreAdjustment = initialCapital - accountBalance;
         const bonusAmount = initialCapital * bonusPct / 100;
-        const topUp = restoreAmount + bonusAmount;
-        accountBalance += topUp;
-        cumulativeTopUps += topUp;
+        const targetBalance = initialCapital + bonusAmount;
+        const netAdjustment = targetBalance - accountBalance;
+        const topUp = Math.max(0, netAdjustment);
+        const normalizationWithdrawal = Math.max(0, -netAdjustment);
+        accountBalance = targetBalance;
+        actualCashInjected += topUp;
+        // The user's replenishment schedule is tracked at its stated nominal
+        // restore-plus-bonus amount; actual net deposits are shown separately.
+        cumulativeTopUps += Math.max(0, restoreAdjustment) + bonusAmount;
         capitalEvents.push({
           time: item.trade.exitTime,
           symbol: item.candidate.symbol,
           type: "loss_replenishment",
           lossStreak,
-          restoreAmount,
+          restoreAdjustment,
           bonusAmount,
           topUp,
+          normalizationWithdrawal,
+          targetBalance,
           accountBalance
         });
       } else {

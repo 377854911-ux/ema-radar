@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { buildDailyUniverse, normalizeKline, fetchBacktestDataset, EMA_WARMUP_BARS, fetchFundingHistory, fetchKlinesRange, createHistoricalCache } from "../js/historical-data.js";
-import { runHistoricalBacktest } from "../js/historical-backtest.js";
+import { runHistoricalBacktest, createBacktestRange, BACKTEST_PERIOD_DAYS } from "../js/historical-backtest.js";
 import { calculateEMA } from "../js/ema-engine.js";
 
 test("historical cache falls back to page memory when IndexedDB is unavailable", async () => {
@@ -324,4 +324,14 @@ test("public historical download feeds a complete EMA backtest end to end", asyn
   assert.equal(result.accepted[0].status, "closed");
   assert.equal(result.accepted[0].exitReason, "take_profit");
   assert.ok(result.report.netProfit > 0);
+});
+
+
+test("supports the 90-day range exposed by the backtest page", () => {
+  const endTime = 1_800_000_000_000;
+  assert.deepEqual(BACKTEST_PERIOD_DAYS, [7, 30, 60, 90]);
+  const range = createBacktestRange(90, endTime);
+  assert.equal(range.endTime, Math.floor(endTime / 86_400_000) * 86_400_000);
+  assert.equal(range.endTime - range.startTime, 90 * 86_400_000);
+  assert.throws(() => createBacktestRange(120, endTime), /7, 30, 60, or 90/);
 });

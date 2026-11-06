@@ -234,7 +234,7 @@ export async function buildHistoricalTop100({
 export async function fetchFundingHistory({
   symbol, startTime, endTime, fetchImpl = fetch, cache = createHistoricalCache()
 }) {
-  const cacheKey = `funding|${symbol}|${startTime}|${endTime}`;
+  const cacheKey = `funding-v2|${symbol}|${startTime}|${endTime}`;
   const cached = await cache.get(cacheKey);
   if (cached) return cached;
   const all = [];
@@ -257,8 +257,27 @@ export async function fetchFundingHistory({
     cursor = next;
     if (rows.length < 1000) break;
   }
-  const unique = [...new Map(all.map(item => [item.fundingTime, item])).values()]
-    .sort((a, b) => a.fundingTime - b.fundingTime);
+  // Collapse exact duplicate API rows, but preserve conflicting records at the
+  // same settlement timestamp so the execution engine can mark them ambiguous.
+  const byTime = new Map();
+  for (const item of all) {
+    const group = byTime.get(item.fundingTime) ?? [];
+    group.push(item);
+    byTime.set(item.fundingTime, group);
+  }
+  const unique = [];
+  const sameValue = (a, b) => a === b
+    || (a !== null && a !== undefined && b !== null && b !== undefined
+      && Number.isFinite(Number(a)) && Number.isFinite(Number(b))
+      && Number(a) === Number(b));
+  for (const [fundingTime, group] of byTime) {
+    const first = group[0];
+    const hasConflict = group.some(item =>
+      !sameValue(item.rate, first.rate) || !sameValue(item.markPrice, first.markPrice)
+    );
+    unique.push(...(hasConflict ? group : [first]));
+  }
+  unique.sort((a, b) => a.fundingTime - b.fundingTime);
   await cache.put(cacheKey, unique, `${symbol}|funding`);
   return unique;
 }

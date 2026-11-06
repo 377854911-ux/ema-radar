@@ -3,28 +3,240 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="theme-color" content="#101827">
+<meta name="theme-color" content="#0b1220">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="EMA雷达">
-<title>EMA雷达</title>
+<title>EMA雷达 V1</title>
 <style>
-:root{color-scheme:dark;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:#0b1220;color:#edf3fb}
+:root{color-scheme:dark;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:#0b1220;color:#edf3fb;font-synthesis:none}
 *{box-sizing:border-box}
-body{margin:0;min-height:100vh;min-height:100dvh;padding:env(safe-area-inset-top) 18px env(safe-area-inset-bottom);display:grid;place-items:center;background:linear-gradient(160deg,#14233a,#0b1220 62%)}
-main{width:min(100%,520px);text-align:center;padding:32px 20px}
-.mark{width:66px;height:66px;margin:0 auto 22px;border:1px solid #314765;border-radius:20px;display:grid;place-items:center;background:#172941;color:#9fc2ff;font-size:27px;font-weight:800;letter-spacing:-2px}
-h1{font-size:24px;margin:0 0 10px}
-p{font-size:14px;line-height:1.7;color:#9aabc0;margin:0}
-.line{width:42px;height:3px;border-radius:9px;background:#426fae;margin:24px auto 0}
+body{margin:0;min-height:100vh;min-height:100dvh;background:linear-gradient(160deg,#14233a,#0b1220 48%);padding:env(safe-area-inset-top) 14px env(safe-area-inset-bottom)}
+main{width:min(100%,760px);margin:0 auto;padding:20px 0 44px}
+header{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:18px}
+.brand{display:flex;align-items:center;gap:12px}
+.mark{width:46px;height:46px;border:1px solid #314765;border-radius:15px;display:grid;place-items:center;background:#172941;color:#9fc2ff;font-size:19px;font-weight:800}
+h1{font-size:21px;margin:0 0 3px}
+.sub{font-size:11px;color:#8da2bd;letter-spacing:.06em}
+.pill{font-size:11px;border:1px solid #34516f;border-radius:999px;padding:6px 9px;color:#a9c6eb;white-space:nowrap}
+.panel{background:#111d2d;border:1px solid #263a53;border-radius:17px;padding:15px;margin:12px 0}
+.panel h2{font-size:15px;margin:0 0 12px}
+.note{font-size:12px;color:#94a8c0;line-height:1.55}
+.actions{display:flex;gap:9px;flex-wrap:wrap;margin-top:12px}
+button{border:0;border-radius:12px;padding:12px 15px;font-weight:700;font-size:14px;background:#3678c8;color:white;cursor:pointer}
+button.secondary{background:#263b55;color:#d9e7f7}
+button:disabled{opacity:.5;cursor:not-allowed}
+.tf-grid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px}
+.tf{display:flex;align-items:center;justify-content:center;gap:5px;background:#17283d;border:1px solid #2c425d;border-radius:10px;padding:9px 3px;font-size:12px}
+.tf input{accent-color:#78aef0;margin:0}
+.setting-row{display:grid;grid-template-columns:1fr 112px;gap:10px;align-items:center;margin:9px 0}
+.setting-row label{font-size:13px;color:#d2deec}
+input[type=number],select{width:100%;background:#0b1625;border:1px solid #344a65;border-radius:9px;color:#edf3fb;padding:10px;font-size:14px}
+hr{border:0;border-top:1px solid #263a53;margin:14px 0}
+.progress{height:7px;background:#26384e;border-radius:20px;overflow:hidden;margin:10px 0}
+.progress>i{display:block;height:100%;width:0;background:#69a5ed;transition:width .2s}
+.status{font-size:12px;color:#9db0c8;line-height:1.5;min-height:18px}
+.result-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
+.result-head h2{margin:0}
+.count{font-size:12px;color:#9aadc4}
+.signal{background:#15243a;border:1px solid #2b405c;border-radius:13px;padding:12px;margin:8px 0}
+.signal-top{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.symbol{font-size:15px;font-weight:750}
+.direction{font-size:12px;font-weight:800}
+.long{color:#ff656d}.short{color:#48d69a}
+.signal-meta{font-size:11px;color:#9aadc4;display:flex;flex-wrap:wrap;gap:10px;margin-top:8px}
+.empty{font-size:13px;color:#8296af;text-align:center;padding:18px 4px}
+footer{font-size:11px;color:#71859e;text-align:center;line-height:1.6;padding:12px}
+@media(max-width:390px){.tf-grid{grid-template-columns:repeat(4,minmax(0,1fr))}.panel{padding:13px}}
 </style>
 </head>
 <body>
 <main>
-  <div class="mark" aria-hidden="true">EMA</div>
-  <h1>EMA 雷达</h1>
-  <p>应用外壳已保留。全新版本正在重新搭建。</p>
-  <div class="line" aria-hidden="true"></div>
+<header>
+  <div class="brand"><div class="mark">EMA</div><div><h1>EMA 雷达</h1><div class="sub">BINANCE USDⓈ-M · PUBLIC MARKET DATA</div></div></div>
+  <div class="pill">V1 重建版</div>
+</header>
+
+<section class="panel">
+  <h2>扫描周期</h2>
+  <div id="timeframes" class="tf-grid"></div>
+  <div class="actions">
+    <button id="scanBtn">立即扫描</button>
+    <button id="autoBtn" class="secondary">启动自动扫描</button>
+  </div>
+  <div class="progress"><i id="progressBar"></i></div>
+  <div id="status" class="status">等待扫描。仅使用公开行情，不连接钱包、不读取账户、不下单。</div>
+</section>
+
+<section class="panel">
+  <h2>扫描设置</h2>
+  <div class="setting-row"><label for="interval">自动扫描间隔</label><select id="interval"><option value="5">5 分钟</option><option value="10">10 分钟</option><option value="15">15 分钟</option><option value="30" selected>30 分钟</option><option value="60">60 分钟</option><option value="120">120 分钟</option></select></div>
+  <div class="note">每个周期可单独设置信号 K 线实体最大涨跌幅。留空表示不启用该过滤；达到或超过阈值的信号会被排除。</div>
+  <div id="thresholds"></div>
+  <div class="actions"><button id="saveBtn" class="secondary">保存设置</button><button id="allBtn" class="secondary">全选周期</button><button id="clearBtn" class="secondary">清空周期</button></div>
+  <div id="saveStatus" class="status"></div>
+</section>
+
+<section class="panel">
+  <div class="result-head"><h2><span class="long">↑ 多头信号</span></h2><span id="longCount" class="count">0 个</span></div>
+  <div id="longResults" class="empty">暂无扫描结果</div>
+</section>
+<section class="panel">
+  <div class="result-head"><h2><span class="short">↓ 空头信号</span></h2><span id="shortCount" class="count">0 个</span></div>
+  <div id="shortResults" class="empty">暂无扫描结果</div>
+</section>
+<footer>V1 当前阶段仅实现公开行情扫描。回测、资金管理和完整参数页将在扫描引擎验证后逐步接入。iPhone 页面关闭或锁屏后不会持续扫描。</footer>
 </main>
+
+<script type="module">
+import { getTop100UsdtPerpetual, scanMarket, SUPPORTED_TIMEFRAMES } from "./js/binance-public.js";
+
+const STORAGE_KEY = "ema-radar-v1-settings";
+const DEFAULTS = {
+  timeframes: ["1h","2h","4h","6h","8h","12h","1d"],
+  intervalMinutes: 30,
+  bodyThresholds: {}
+};
+let settings = loadSettings();
+let scanning = false;
+let autoTimer = null;
+let lastSignalKeys = new Set();
+
+function loadSettings() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || "null");
+    if (!saved || typeof saved !== "object") return structuredClone(DEFAULTS);
+    return {
+      ...structuredClone(DEFAULTS),
+      ...saved,
+      timeframes: Array.isArray(saved.timeframes) ? saved.timeframes.filter(tf => SUPPORTED_TIMEFRAMES.includes(tf)) : [...DEFAULTS.timeframes],
+      bodyThresholds: saved.bodyThresholds && typeof saved.bodyThresholds === "object" ? saved.bodyThresholds : {}
+    };
+  } catch {
+    return structuredClone(DEFAULTS);
+  }
+}
+
+const $ = id => document.getElementById(id);
+const timeframeRoot = $("timeframes");
+const thresholdRoot = $("thresholds");
+
+function renderTimeframes() {
+  timeframeRoot.innerHTML = SUPPORTED_TIMEFRAMES.map(tf =>
+    '<label class="tf"><input type="checkbox" value="' + tf + '" ' + (settings.timeframes.includes(tf) ? "checked" : "") + '> ' + tf + '</label>'
+  ).join("");
+  thresholdRoot.innerHTML = SUPPORTED_TIMEFRAMES.map(tf =>
+    '<div class="setting-row"><label for="threshold-' + tf + '">' + tf + ' 实体阈值 (%)</label><input id="threshold-' + tf + '" type="number" min="0.01" step="0.01" inputmode="decimal" placeholder="不限制" value="' + (settings.bodyThresholds[tf] ?? "") + '"></div>'
+  ).join("");
+  $("interval").value = String(settings.intervalMinutes || 30);
+}
+function readSettingsFromUI() {
+  settings.timeframes = [...timeframeRoot.querySelectorAll("input:checked")].map(input => input.value);
+  settings.intervalMinutes = Number($("interval").value) || 30;
+  const thresholds = {};
+  for (const tf of SUPPORTED_TIMEFRAMES) {
+    const raw = $("threshold-" + tf).value.trim();
+    if (raw !== "") {
+      const value = Number(raw);
+      if (Number.isFinite(value) && value > 0) thresholds[tf] = value;
+    }
+  }
+  settings.bodyThresholds = thresholds;
+}
+function saveSettings() {
+  readSettingsFromUI();
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(settings));
+  $("saveStatus").textContent = "设置已保存在这台设备的浏览器中。";
+  if (autoTimer) startAutoScan();
+}
+function setStatus(message) { $("status").textContent = message; }
+function fmt(value, digits = 3) {
+  return Number(value).toLocaleString("en-US", { maximumFractionDigits: digits });
+}
+function renderSignals(target, countTarget, items, direction) {
+  $(countTarget).textContent = items.length + " 个";
+  if (!items.length) {
+    $(target).className = "empty";
+    $(target).textContent = "暂无符合条件的新信号";
+    return;
+  }
+  $(target).className = "";
+  $(target).innerHTML = items.map(item => {
+    const isLong = direction === "LONG";
+    return '<article class="signal"><div class="signal-top"><span class="symbol">' + item.symbol + '</span><span class="direction ' + (isLong ? "long" : "short") + '">' + (isLong ? "↑ 多头" : "↓ 空头") + '</span></div><div class="signal-meta"><span>周期 ' + item.timeframe + '</span><span>EMA距离 ' + fmt(item.distanceRate, 4) + '%</span><span>实体 ' + fmt(item.bodyPercent, 3) + '%</span><span>收盘 ' + fmt(item.closePrice, 8) + '</span></div></article>';
+  }).join("");
+}
+async function scanNow() {
+  if (scanning) return;
+  readSettingsFromUI();
+  if (!settings.timeframes.length) {
+    setStatus("请至少选择一个扫描周期。");
+    return;
+  }
+  scanning = true;
+  $("scanBtn").disabled = true;
+  $("progressBar").style.width = "0%";
+  setStatus("正在读取币安合约列表和 24 小时成交额…");
+  try {
+    const symbols = await getTop100UsdtPerpetual();
+    if (!symbols.length) throw new Error("没有取得可扫描的 USDT 永续合约。");
+    setStatus("已筛选成交额前 " + symbols.length + " 个交易对，正在扫描 K 线…");
+    const result = await scanMarket({
+      symbols,
+      timeframes: settings.timeframes,
+      bodyThresholds: settings.bodyThresholds,
+      concurrency: 6,
+      onProgress: progress => {
+        const pct = progress.total ? progress.completed / progress.total * 100 : 0;
+        $("progressBar").style.width = pct + "%";
+        setStatus("扫描进度 " + progress.completed + "/" + progress.total + " · 请求失败 " + progress.failures);
+      }
+    });
+    const all = [...result.long, ...result.short];
+    const freshKeys = new Set(all.map(item => item.symbol + ":" + item.direction + ":" + item.timeframe + ":" + item.candleOpenTime));
+    const newCount = [...freshKeys].filter(key => !lastSignalKeys.has(key)).length;
+    lastSignalKeys = freshKeys;
+    renderSignals("longResults","longCount",result.long,"LONG");
+    renderSignals("shortResults","shortCount",result.short,"SHORT");
+    setStatus("完成：" + result.scanned + "/" + result.total + " 组扫描 · " + symbols.length + " 个合约 · " + result.failures + " 次请求失败 · 新信号 " + newCount + " 个 · " + new Date().toLocaleTimeString());
+  } catch (error) {
+    setStatus("扫描失败：" + (error?.message || "网络错误") + "。请稍后重试。");
+  } finally {
+    scanning = false;
+    $("scanBtn").disabled = false;
+  }
+}
+function startAutoScan() {
+  if (autoTimer) clearInterval(autoTimer);
+  const minutes = Math.max(1, Number($("interval").value) || 30);
+  settings.intervalMinutes = minutes;
+  autoTimer = setInterval(scanNow, minutes * 60 * 1000);
+  $("autoBtn").textContent = "停止自动扫描";
+  $("autoBtn").dataset.active = "true";
+  setStatus("自动扫描已启动，每 " + minutes + " 分钟扫描一次；页面关闭或锁屏后不会持续运行。");
+}
+function stopAutoScan() {
+  if (autoTimer) clearInterval(autoTimer);
+  autoTimer = null;
+  $("autoBtn").textContent = "启动自动扫描";
+  $("autoBtn").dataset.active = "false";
+  setStatus("自动扫描已停止。");
+}
+$("scanBtn").addEventListener("click", scanNow);
+$("autoBtn").addEventListener("click", () => {
+  if (autoTimer) stopAutoScan(); else startAutoScan();
+});
+$("saveBtn").addEventListener("click", saveSettings);
+$("allBtn").addEventListener("click", () => {
+  timeframeRoot.querySelectorAll("input").forEach(input => { input.checked = true; });
+});
+$("clearBtn").addEventListener("click", () => {
+  timeframeRoot.querySelectorAll("input").forEach(input => { input.checked = false; });
+});
+$("interval").addEventListener("change", () => {
+  if (autoTimer) startAutoScan();
+});
+renderTimeframes();
+</script>
 </body>
 </html>

@@ -177,8 +177,6 @@ Trading costs:
 - Audible alerts may be offered for newly confirmed signals while the app is active and notification/audio permissions are available.
 - Do not promise continuous scanning when the page is closed or the iPhone is locked. True background scanning requires a separate server-side service and is outside this V1 scope.
 
-## 14. Items requiring user confirmation before backtest implementation
+## 14. Confirmation status
 
-
-
-No implementation should silently invent answers to these unresolved items.
+All previously listed rule questions have been answered and incorporated into this specification. Fee rates and slippage remain editable user settings; historical funding rates should be fetched from Binance public data when available, with missing data clearly flagged. No unapproved default fee or slippage values are to be presented as user-selected values.

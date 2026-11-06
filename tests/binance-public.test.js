@@ -35,7 +35,7 @@ test("live scanner excludes both positive and negative high funding rates before
     assert.equal(result.fundingFiltered, 1);
     assert.equal(result.fundingUnavailable, 1);
     assert.deepEqual(requestedKlines, ["LOWUSDT"]);
-    assert.deepEqual(requestedLimits, ["502"]);
+    assert.deepEqual(requestedLimits, ["499"]);
     assert.equal(result.scanned, 3);
   } finally {
     globalThis.fetch = originalFetch;
@@ -60,8 +60,11 @@ test("live EMA scanner seeds once, then fetches only candles since the cached cl
       startTime: url.searchParams.get("startTime"),
       limit: url.searchParams.get("limit")
     });
-    if (!url.searchParams.has("startTime")) {
-      return { ok: true, json: async () => initial };
+    if (url.searchParams.get("limit") === "499" && !url.searchParams.has("startTime")) {
+      return { ok: true, json: async () => initial.slice(3) };
+    }
+    if (url.searchParams.get("limit") === "3" && Number(url.searchParams.get("startTime")) === baseOpenTime) {
+      return { ok: true, json: async () => initial.slice(0, 3) };
     }
     const start = Number(url.searchParams.get("startTime"));
     if (start === currentOpenTime) {
@@ -80,13 +83,15 @@ test("live EMA scanner seeds once, then fetches only candles since the cached cl
     fakeNow = currentOpenTime + intervalMs + 1000;
     await scanMarket({ symbols: ["CACHEUSDT"], timeframes: ["15m"], concurrency: 1 });
     await scanMarket({ symbols: ["CACHEUSDT"], timeframes: ["15m"], concurrency: 1 });
-    assert.equal(requests.length, 3);
-    assert.equal(requests[0].limit, "502");
+    assert.equal(requests.length, 4);
+    assert.equal(requests[0].limit, "499");
     assert.equal(requests[0].startTime, null);
-    assert.equal(requests[1].startTime, String(currentOpenTime));
-    assert.equal(requests[1].limit, "4");
-    assert.equal(requests[2].startTime, String(currentOpenTime + intervalMs));
-    assert.equal(requests[2].limit, "3");
+    assert.equal(requests[1].limit, "3");
+    assert.equal(requests[1].startTime, String(baseOpenTime));
+    assert.equal(requests[2].startTime, String(currentOpenTime));
+    assert.equal(requests[2].limit, "4");
+    assert.equal(requests[3].startTime, String(currentOpenTime + intervalMs));
+    assert.equal(requests[3].limit, "3");
   } finally {
     globalThis.fetch = originalFetch;
     Date.now = originalNow;

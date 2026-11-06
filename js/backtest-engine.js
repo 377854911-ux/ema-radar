@@ -262,9 +262,10 @@ export function simulateTrade({ candles, signalIndex, direction, config, funding
       seenOpenFunding.set(time, event);
       const entryBar = candles[entryIndex];
       const uncertainEntryTimestamp = time === entryTime;
+      const uncertainAsOfTimestamp = time === asOfTime;
       const uncertainLimitEntry = config.entryMethod === "retracement_limit"
         && time > entryBar.openTime && time <= (entryBar.closeTime ?? entryBar.openTime);
-      if (uncertainEntryTimestamp || uncertainLimitEntry) {
+      if (uncertainEntryTimestamp || uncertainAsOfTimestamp || uncertainLimitEntry) {
         openFundingComplete = false;
         continue;
       }

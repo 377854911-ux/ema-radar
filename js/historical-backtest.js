@@ -286,6 +286,8 @@ export async function runHistoricalBacktest(dataset, config = {}, options = {}) 
     report: {
       openTrades: portfolio.accepted.filter(trade => trade.status === "open").length,
       totalReturnPct: portfolio.summary.totalReturnPct,
+      totalProfit: portfolio.summary.totalProfit,
+      totalLoss: portfolio.summary.totalLoss,
       netProfit: portfolio.summary.netProfit,
       winRatePct: portfolio.summary.winRatePct,
       riskRewardRatio: portfolio.summary.riskRewardRatio,

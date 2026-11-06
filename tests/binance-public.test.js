@@ -50,7 +50,7 @@ test("funding rate map reads Binance last settled rates for selected symbols", a
     ]
   });
   try {
-    const rates = await getFundingRateMap(["AAAUSDT"]);
+    const rates = await getFundingRateMap(["AAAUSDT", "NULLUSDT"]);
     assert.equal(rates.get("AAAUSDT"), 0.0001);
     assert.equal(rates.has("BBBUSDT"), false);
     assert.equal(rates.get("NULLUSDT"), null);

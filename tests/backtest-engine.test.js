@@ -66,7 +66,7 @@ test("retracement limit uses the configured body percentage and cancels if unfil
 
 test("market-style exit slippage is adverse and fees are itemized", () => {
   const data = [
-    { openTime: 0, closeTime: 9, open: 100, high: 101, low: 99, close: 100 },
+    { openTime: 0, closeTime: 9, open: 98, high: 101, low: 97, close: 100 },
     { openTime: 10, closeTime: 19, open: 100, high: 101, low: 97, close: 99 },
     { openTime: 20, closeTime: 29, open: 99, high: 100, low: 98, close: 99 }
   ];
@@ -92,7 +92,7 @@ test("timeout counts complete candles after entry", () => {
 
 test("funding is direction-aware and missing funding marks trade incomplete", () => {
   const data = [
-    { openTime: 0, closeTime: 9, open: 100, high: 101, low: 99, close: 100 },
+    { openTime: 0, closeTime: 9, open: 98, high: 101, low: 97, close: 100 },
     { openTime: 10, closeTime: 19, open: 100, high: 103, low: 99, close: 102 },
     { openTime: 20, closeTime: 29, open: 102, high: 103, low: 101, close: 102 }
   ];

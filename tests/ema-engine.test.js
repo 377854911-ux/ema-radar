@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { calculateEMA, analyzeLatestClosedSignal, rankAndDeduplicateSignals, EMA_WARMUP_BARS } from "../js/ema-engine.js";
+import { calculateEMA, updateEMAValue, analyzeLatestClosedSignal, rankAndDeduplicateSignals, EMA_WARMUP_BARS } from "../js/ema-engine.js";
 
 function makeCandle(openTime, open, high, low, close, closeTime = openTime + 59_999) {
   return [openTime, String(open), String(high), String(low), String(close), "0", closeTime];
@@ -27,6 +27,15 @@ test("EMA uses SMA seed and recursive smoothing", () => {
   assert.equal(ema[2], 2);
   assert.equal(ema[3], 3);
   assert.equal(ema[4], 4);
+});
+
+test("incremental EMA update matches the recursive series calculation", () => {
+  const closes = Array.from({ length: 120 }, (_, i) => 100 + Math.sin(i / 7) * 2 + i * 0.01);
+  for (const period of [25, 50, 100]) {
+    const previous = calculateEMA(closes, period).at(-1);
+    const next = updateEMAValue(previous, 103.25, period);
+    assert.equal(next, calculateEMA([...closes, 103.25], period).at(-1));
+  }
 });
 
 test("insufficient candles do not create a signal", () => {

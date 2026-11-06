@@ -24,6 +24,13 @@ async function requestJSON(url, fetchImpl = fetch) {
   if (!response.ok) {
     const error = new Error(`Binance API ${response.status}`);
     error.status = response.status;
+    const retryAfter = response.headers?.get?.("Retry-After");
+    if (retryAfter !== null && retryAfter !== undefined) {
+      const seconds = Number(retryAfter);
+      const retryAt = Date.parse(retryAfter);
+      if (Number.isFinite(seconds) && seconds >= 0) error.retryAfterMs = seconds * 1000;
+      else if (Number.isFinite(retryAt)) error.retryAfterMs = Math.max(0, retryAt - Date.now());
+    }
     throw error;
   }
   return response.json();
@@ -143,6 +150,12 @@ export function createHistoricalCache(indexedDBImpl = globalThis.indexedDB) {
   };
 }
 
+function retryDelayMs(error, attempt, baseDelay = 400) {
+  return Number.isFinite(error?.retryAfterMs)
+    ? error.retryAfterMs
+    : baseDelay * (attempt + 1);
+}
+
 async function requestJSONWithRetry(url, fetchImpl = fetch, retries = 3) {
   let lastError;
   for (let attempt = 0; attempt < retries; attempt++) {
@@ -152,7 +165,7 @@ async function requestJSONWithRetry(url, fetchImpl = fetch, retries = 3) {
       lastError = error;
       if (error.status && error.status !== 429 && error.status < 500) throw error;
       if (attempt === retries - 1) throw lastError;
-      await new Promise(resolve => setTimeout(resolve, 400 * (attempt + 1)));
+      await new Promise(resolve => setTimeout(resolve, retryDelayMs(error, attempt)));
     }
   }
   throw lastError;
@@ -199,7 +212,7 @@ export async function fetchKlinesRange({
         lastError = error;
         if (error.status && error.status !== 429 && error.status < 500) throw error;
         if (attempt === concurrencyRetries - 1) throw lastError;
-        await new Promise(resolve => setTimeout(resolve, 500 * (attempt + 1)));
+        await new Promise(resolve => setTimeout(resolve, retryDelayMs(error, attempt, 500)));
       }
     }
     if (!Array.isArray(rows)) throw new Error(`Binance returned an invalid kline response for ${symbol} ${interval}`);

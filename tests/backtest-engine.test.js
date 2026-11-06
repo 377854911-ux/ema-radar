@@ -332,3 +332,26 @@ test("conflicting duplicate funding records make settlement incomplete", () => {
   assert.equal(result.netPnl, null);
   assert.equal(result.reason, "missing_or_ambiguous_funding_data");
 });
+
+
+test("limit-entry timeout starts after the partial fill candle", () => {
+  const data = [
+    { openTime: 0, closeTime: 9, open: 100, high: 111, low: 99, close: 110 },
+    { openTime: 10, closeTime: 19, open: 109, high: 110, low: 107, close: 109 },
+    { openTime: 20, closeTime: 29, open: 109, high: 110, low: 108, close: 109 },
+    { openTime: 30, closeTime: 39, open: 109, high: 110, low: 108, close: 109 }
+  ];
+  const result = simulateTrade({
+    candles: data, signalIndex: 0, direction: "LONG",
+    config: {
+      ...base,
+      entryMethod: "retracement_limit",
+      retracementPct: 20,
+      limitValidityBars: 1,
+      timeoutBars: 1
+    }
+  });
+  assert.equal(result.entryIndex, 1);
+  assert.equal(result.exitReason, "timeout");
+  assert.equal(result.exitIndex, 2);
+});

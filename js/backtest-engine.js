@@ -217,9 +217,59 @@ export function simulateTrade({ candles, signalIndex, direction, config, funding
     }
   }
 
-  if (!exit) return {
-    status: "open", reason: "insufficient_future_candles", direction, entryIndex, entryTime, entryPrice, notional, entryFee, hardStop, auxiliaryStop, takeProfit, exitTime: null
-  };
+  if (!exit) {
+    // An open position still incurs/pays funding settlements through the
+    // final available candle. Unrealized price PnL remains excluded.
+    const asOfTime = candles[candles.length - 1].closeTime
+      ?? candles[candles.length - 1].openTime;
+    const openFundingEvents = [];
+    let openFundingComplete = true;
+    let openFundingPnl = 0;
+    const seenOpenFunding = new Map();
+    for (const event of fundingEvents) {
+      const time = num(event.fundingTime, "fundingTime");
+      if (time < entryTime || time > asOfTime) continue;
+      const prior = seenOpenFunding.get(time);
+      if (prior) {
+        const sameValue = (a, b) => a === b
+          || (a !== null && a !== undefined && b !== null && b !== undefined
+            && Number.isFinite(Number(a)) && Number.isFinite(Number(b))
+            && Number(a) === Number(b));
+        if (!sameValue(prior.rate, event.rate) || !sameValue(prior.markPrice, event.markPrice)) {
+          openFundingComplete = false;
+        }
+        continue;
+      }
+      seenOpenFunding.set(time, event);
+      const entryBar = candles[entryIndex];
+      const uncertainEntryTimestamp = time === entryTime;
+      const uncertainLimitEntry = config.entryMethod === "retracement_limit"
+        && time > entryBar.openTime && time <= (entryBar.closeTime ?? entryBar.openTime);
+      if (uncertainEntryTimestamp || uncertainLimitEntry) {
+        openFundingComplete = false;
+        continue;
+      }
+      if (event.rate === null || event.rate === undefined || !Number.isFinite(Number(event.rate))
+          || event.markPrice === null || event.markPrice === undefined || !(Number(event.markPrice) > 0)) {
+        openFundingComplete = false;
+        continue;
+      }
+      const rate = Number(event.rate);
+      const markPrice = Number(event.markPrice);
+      const positionValueAtFunding = notional * markPrice / entryPrice;
+      const payment = direction === "LONG" ? -positionValueAtFunding * rate : positionValueAtFunding * rate;
+      openFundingPnl += payment;
+      openFundingEvents.push({ fundingTime: time, rate, markPrice, amount: payment });
+    }
+    return {
+      status: "open",
+      reason: "insufficient_future_candles",
+      direction, entryIndex, entryTime, entryPrice, notional, entryFee,
+      hardStop, auxiliaryStop, takeProfit, exitTime: null,
+      asOfTime, fundingPnl: openFundingComplete ? openFundingPnl : null,
+      fundingEvents: openFundingEvents, fundingComplete: openFundingComplete
+    };
+  }
 
   const exitNotional = notional * exit.price / entryPrice;
   const exitFee = fee(exitNotional, config.exitFeeRate);

@@ -37,6 +37,15 @@ export function simulatePortfolio(candidates, options = {}) {
   const selected = [];
   const skipped = normalized.filter(c => c._invalid).map(candidate => ({ candidate, reason: "missing_signal_candle" }));
   for (const group of grouped.values()) {
+    const directions = new Set(group.map(candidate => candidate.direction));
+    if (directions.size > 1) {
+      // Conflicting long/short signals at the same symbol/time are ambiguous.
+      // Reject the whole group instead of letting input order choose a side.
+      for (const conflicting of group) {
+        skipped.push({ candidate: conflicting, reason: "conflicting_directions_same_signal_time" });
+      }
+      continue;
+    }
     group.sort((a, b) =>
       a._timeframeMs - b._timeframeMs
       || Number(a.distanceRate ?? Infinity) - Number(b.distanceRate ?? Infinity)

@@ -443,3 +443,18 @@ test("later open-position funding cannot alter an earlier losing-exit replenishm
   const snapshotTypes = result.capital.events.map(event => event.type);
   assert.ok(snapshotTypes.indexOf("loss_replenishment") < snapshotTypes.indexOf("open_position_funding"));
 });
+
+test("simultaneous equal-ranked entries use stable symbol order, not input order", () => {
+  const candidates = ["B_STABLEUSDT", "A_STABLEUSDT"].map(symbol => ({
+    symbol, timeframe: "1h", direction: "LONG", distanceRate: 0.1,
+    candles: longCandles(), signalIndex: 0, config
+  }));
+  for (const ordered of [candidates, [...candidates].reverse()]) {
+    const result = simulatePortfolio(ordered, { maxOpenTrades: 1 });
+    assert.equal(result.accepted.length, 1);
+    assert.equal(result.accepted[0].symbol, "A_STABLEUSDT");
+    assert.equal(result.skipped.some(item =>
+      item.candidate.symbol === "B_STABLEUSDT" && item.reason === "max_open_trades_reached"
+    ), true);
+  }
+});

@@ -128,7 +128,8 @@ async function run(){
    const stage=p.phase==="daily-universe"?"历史每日成交额名单":p.phase==="klines"?"下载历史K线":"下载历史资金费率";
    if(p.total){$("progress").style.width=Math.min(99,p.completed/p.total*100)+"%";$("status").textContent=stage+"："+p.completed+"/"+p.total+(p.symbol?" · "+p.symbol:"")}
   }});
-  $("status").textContent="历史数据准备完成，正在模拟交易…";
+  $("progress").style.width="0%";
+  $("status").textContent="历史数据准备完成，正在扫描历史信号…";
   const result=await runHistoricalBacktest(dataset,{initialCapital:10000,maxOpenTrades:5,timeframes:s.timeframes,bodyThresholds:s.bodyThresholds,tradeConfig:{
    entryMethod:s.entryMethod,retracementPct:s.retracementPct===""?undefined:Number(s.retracementPct),limitValidityBars:s.limitValidityBars===""?undefined:Number(s.limitValidityBars),
    hardStopPct:Number(s.hardStopPct),auxiliaryStop:s.auxiliaryStop,rr:Number(s.rr),positionNotional:Number(s.positionNotional),
@@ -137,24 +138,23 @@ async function run(){
   },timeframeSettings:Object.fromEntries(s.timeframes.map(tf=>[tf,{maxBodyPercent:s.bodyThresholds[tf]??null}]))},{
    onSignal:addLiveSignal,
    onProgress:p=>{
-    if(p.phase==="series-scan"){
-     $("scannedCount").textContent=String(p.symbolTimeframeSeries);
+    if(p.phase==="series-scan"||p.phase==="signal-scan"||p.phase==="portfolio-progress"){
+     const total=p.totalSeriesCount||0;
+     $("scannedCount").textContent=total?p.symbolTimeframeSeries+" / "+total:String(p.symbolTimeframeSeries);
+     if(total)$("progress").style.width=Math.min(99,p.symbolTimeframeSeries/total*100)+"%";
     }
-    if(p.phase==="signal-scan"){
-     $("scannedCount").textContent=String(p.symbolTimeframeSeries);
-     $("signalCount").textContent=String(p.signalsFound);
-    }
+    if(p.phase==="signal-scan")$("signalCount").textContent=String(p.signalsFound);
     if(p.phase==="portfolio-progress"){
      $("closedCount").textContent=String(p.closedTrades);
      $("openCount").textContent=String(p.openTrades);
-     $("status").textContent="已扫描 "+p.symbolTimeframeSeries+" 组序列；当前已发现信号的阶段模拟："+p.closedTrades+" 笔已平仓、"+p.openTrades+" 笔未平仓（暂定，后续周期加入后会重新计算）。";
+     $("status").textContent="已扫描 "+p.symbolTimeframeSeries+"/"+p.totalSeriesCount+" 组序列；当前已发现信号的阶段模拟："+p.closedTrades+" 笔已平仓、"+p.openTrades+" 笔未平仓（暂定，后续周期加入后会重新计算）。";
     }
    }
   });
   const closed=result.accepted.filter(t=>t.status==="closed").length;
   const opened=result.accepted.filter(t=>t.status==="open").length;
   $("closedCount").textContent=String(closed);$("openCount").textContent=String(opened);
-  $("scannedCount").textContent=String(result.scanStats.symbolTimeframeSeries);
+  $("scannedCount").textContent=result.scanStats.symbolTimeframeSeries+" / "+(result.scanStats.totalSeriesCount||result.scanStats.symbolTimeframeSeries);
   $("signalCount").textContent=String(result.scanStats.signalsFound);
   $("progress").style.width="100%";showReport(result);$("status").textContent="回测完成："+result.period.days+"天 · "+s.timeframes.join("、")+" · "+result.scanStats.signalsFound+"个信号。";
  }catch(e){$("status").textContent="回测失败："+(e?.message||"未知错误")+"。请检查网络后重试。";$("report").textContent="本次回测未完成。"}

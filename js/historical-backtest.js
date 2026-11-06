@@ -2,12 +2,12 @@ import { calculateEMA, TIMEFRAME_MINUTES, EMA_WARMUP_BARS } from "./ema-engine.j
 import { simulatePortfolio } from "./portfolio-engine.js";
 import { isFundingRateAllowed, latestKnownFundingRate } from "./funding-filter.js";
 
-export const BACKTEST_PERIOD_DAYS = Object.freeze([7, 30, 60]);
+export const BACKTEST_PERIOD_DAYS = Object.freeze([7, 30, 60, 90]);
 const DAY_MS = 86_400_000;
 
 export function createBacktestRange(days, endTime = Date.now()) {
   if (!BACKTEST_PERIOD_DAYS.includes(days)) {
-    throw new RangeError("Backtest period must be 7, 30, or 60 days");
+    throw new RangeError("Backtest period must be 7, 30, 60, or 90 days");
   }
   if (!Number.isFinite(endTime) || endTime <= 0) {
     throw new RangeError("endTime must be a positive timestamp");

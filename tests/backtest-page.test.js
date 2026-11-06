@@ -17,6 +17,7 @@ test("backtest page persists its own settings separately from scanner settings",
   assert.ok(html.includes("1 : 1.1"));
   assert.ok(html.includes("策略收益率（按初始资金）"));
   assert.ok(html.includes("实际注入资金"));
+  assert.ok(html.includes("最大回撤（按K线收盘价计浮动盈亏，剔除注资/提取）"));
   assert.equal(html.includes('value="10m"'), false);
   assert.match(html, /localStorage\.setItem\(KEY,JSON\.stringify\(settings\)\)/);
 });

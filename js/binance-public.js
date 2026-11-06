@@ -1,4 +1,4 @@
-import { analyzeLatestClosedSignal, rankAndDeduplicateSignals, TIMEFRAME_MINUTES, EMA_WARMUP_BARS } from "./ema-engine.js";
+import { analyzeLatestClosedSignal, analyzeSignalCandle, updateEMAValue, rankAndDeduplicateSignals, TIMEFRAME_MINUTES, EMA_PERIODS, EMA_WARMUP_BARS } from "./ema-engine.js";
 import { isFundingRateAllowed } from "./funding-filter.js";
 
 const API_BASE = "https://fapi.binance.com";
@@ -63,12 +63,109 @@ export async function getFundingRateMap(symbols) {
     ]));
 }
 
-export async function getKlines(symbol, interval, limit = EMA_WARMUP_BARS + 2) {
+export async function getKlines(symbol, interval, limit = EMA_WARMUP_BARS + 2, startTime = null) {
   if (!SUPPORTED_TIMEFRAMES.includes(interval)) {
     throw new RangeError(`Unsupported Binance timeframe: ${interval}`);
   }
   const query = new URLSearchParams({ symbol, interval, limit: String(limit) });
+  if (Number.isFinite(startTime)) query.set("startTime", String(startTime));
   return getJSON(`${API_BASE}/fapi/v1/klines?${query.toString()}`);
+}
+
+const liveEmaCache = new Map();
+
+function normalizeLiveCandle(raw) {
+  if (Array.isArray(raw)) {
+    return {
+      openTime: Number(raw[0]), open: Number(raw[1]), high: Number(raw[2]),
+      low: Number(raw[3]), close: Number(raw[4]), closeTime: Number(raw[6])
+    };
+  }
+  return {
+    openTime: Number(raw?.openTime), open: Number(raw?.open),
+    high: Number(raw?.high), low: Number(raw?.low),
+    close: Number(raw?.close), closeTime: Number(raw?.closeTime)
+  };
+}
+
+function validLiveCandle(candle, intervalMs) {
+  return [candle.openTime, candle.closeTime, candle.open, candle.high, candle.low, candle.close].every(Number.isFinite)
+    && candle.closeTime === candle.openTime + intervalMs - 1
+    && candle.open > 0 && candle.low > 0
+    && candle.high >= Math.max(candle.open, candle.close)
+    && candle.low <= Math.min(candle.open, candle.close);
+}
+
+async function getLatestLiveSignal(symbol, timeframe, maxBodyPercent) {
+  const key = symbol + "|" + timeframe;
+  const intervalMs = TIMEFRAME_MINUTES[timeframe] * 60_000;
+  const currentOpenTime = Math.floor(Date.now() / intervalMs) * intervalMs;
+  const cached = liveEmaCache.get(key);
+
+  if (cached && Number.isFinite(cached.lastClosedOpenTime)
+      && cached.lastClosedCandle
+      && EMA_PERIODS.every(period => Number.isFinite(cached.emaValues?.[period]))) {
+    const nextOpenTime = cached.lastClosedOpenTime + intervalMs;
+    const elapsedBars = Math.max(2, Math.ceil((Date.now() - cached.lastClosedOpenTime) / intervalMs) + 1);
+    const requestLimit = Math.min(1500, elapsedBars);
+    const rows = await getKlines(symbol, timeframe, requestLimit, nextOpenTime);
+    if (Array.isArray(rows) && rows.length > 0 && rows.length < 1500) {
+      const normalized = rows.map(normalizeLiveCandle);
+      let previousOpenTime = cached.lastClosedOpenTime;
+      const contiguous = normalized.every(candle => {
+        const valid = validLiveCandle(candle, intervalMs)
+          && candle.openTime - previousOpenTime === intervalMs;
+        previousOpenTime = candle.openTime;
+        return valid;
+      });
+      if (contiguous && normalized[0].openTime === nextOpenTime
+          && normalized[normalized.length - 1].openTime === currentOpenTime) {
+        const newClosedCandles = normalized.slice(0, -1);
+        const emaValues = { ...cached.emaValues };
+        for (const candle of newClosedCandles) {
+          for (const period of EMA_PERIODS) {
+            emaValues[period] = updateEMAValue(emaValues[period], candle.close, period);
+          }
+        }
+        const signalCandle = newClosedCandles.at(-1) ?? cached.lastClosedCandle;
+        const formingCandle = normalized.at(-1);
+        const analysis = analyzeSignalCandle(signalCandle, emaValues, {
+          timeframe, maxBodyPercent, expiresAt: formingCandle.closeTime
+        });
+        if (newClosedCandles.length) {
+          liveEmaCache.set(key, {
+            lastClosedOpenTime: signalCandle.openTime,
+            lastClosedCandle: signalCandle,
+            emaValues
+          });
+        }
+        return analysis.signal;
+      }
+    }
+  }
+
+  // First scan, stale cache, or a detected gap: rebuild from a clean 500-bar window.
+  const candles = await getKlines(symbol, timeframe, EMA_WARMUP_BARS + 2);
+  const analysis = analyzeLatestClosedSignal(candles, { timeframe, maxBodyPercent });
+  if (analysis.emaValues && Array.isArray(candles) && candles.length >= EMA_WARMUP_BARS + 2) {
+    const normalized = candles.slice(-(EMA_WARMUP_BARS + 2)).map(normalizeLiveCandle);
+    const lastClosedCandle = normalized.at(-2);
+    const formingCandle = normalized.at(-1);
+    if (validLiveCandle(lastClosedCandle, intervalMs)
+        && validLiveCandle(formingCandle, intervalMs)
+        && formingCandle.openTime === currentOpenTime) {
+      liveEmaCache.set(key, {
+        lastClosedOpenTime: lastClosedCandle.openTime,
+        lastClosedCandle,
+        emaValues: analysis.emaValues
+      });
+    } else {
+      liveEmaCache.delete(key);
+    }
+  } else {
+    liveEmaCache.delete(key);
+  }
+  return analysis.signal;
 }
 
 async function mapWithConcurrency(items, concurrency, worker) {
@@ -129,11 +226,9 @@ export async function scanMarket({
           return null;
         }
       }
-      const candles = await getKlines(symbol, task.timeframe, EMA_WARMUP_BARS + 2);
-      const { signal } = analyzeLatestClosedSignal(candles, {
-        timeframe: task.timeframe,
-        maxBodyPercent: bodyThresholds[task.timeframe]
-      });
+      const signal = await getLatestLiveSignal(
+        symbol, task.timeframe, bodyThresholds[task.timeframe]
+      );
       return signal ? {
         ...signal,
         symbol,

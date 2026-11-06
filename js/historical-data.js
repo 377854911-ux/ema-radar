@@ -118,6 +118,21 @@ export function createHistoricalCache(indexedDBImpl = globalThis.indexedDB) {
   };
 }
 
+async function requestJSONWithRetry(url, fetchImpl = fetch, retries = 3) {
+  let lastError;
+  for (let attempt = 0; attempt < retries; attempt++) {
+    try {
+      return await requestJSON(url, fetchImpl);
+    } catch (error) {
+      lastError = error;
+      if (error.status && error.status !== 429 && error.status < 500) throw error;
+      if (attempt === retries - 1) throw lastError;
+      await new Promise(resolve => setTimeout(resolve, 400 * (attempt + 1)));
+    }
+  }
+  throw lastError;
+}
+
 async function mapLimit(items, concurrency, worker) {
   const output = new Array(items.length);
   let cursor = 0;
@@ -223,7 +238,7 @@ export async function fetchFundingHistory({
     const query = new URLSearchParams({
       symbol, startTime: String(cursor), endTime: String(endTime - 1), limit: "1000"
     });
-    const rows = await requestJSON(`${API}/fapi/v1/fundingRate?${query}`, fetchImpl);
+    const rows = await requestJSONWithRetry(`${API}/fapi/v1/fundingRate?${query}`, fetchImpl);
     if (!rows.length) break;
     for (const row of rows) {
       all.push({

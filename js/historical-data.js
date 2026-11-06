@@ -12,9 +12,9 @@
  * Monitoring labels. Callers must surface these limitations in reports.
  */
 
-const API = "https://fapi.binance.com";
 import { EMA_WARMUP_BARS } from "./ema-engine.js";
 
+const API = "https://fapi.binance.com";
 const DAY = 86_400_000;
 const MAX_KLINES = 1500;
 export { EMA_WARMUP_BARS };

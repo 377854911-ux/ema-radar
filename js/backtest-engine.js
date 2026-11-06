@@ -230,12 +230,12 @@ export function simulateTrade({ candles, signalIndex, direction, config, funding
     if (time >= entryTime && time <= exit.time) {
       const prior = seenFunding.get(time);
       if (prior) {
-        const sameRate = prior.rate === event.rate
-          || (Number.isFinite(Number(prior.rate)) && Number.isFinite(Number(event.rate))
-            && Number(prior.rate) === Number(event.rate));
-        const sameMark = prior.markPrice === event.markPrice
-          || (Number.isFinite(Number(prior.markPrice)) && Number.isFinite(Number(event.markPrice))
-            && Number(prior.markPrice) === Number(event.markPrice));
+        const sameValue = (a, b) => a === b
+          || (a !== null && a !== undefined && b !== null && b !== undefined
+            && Number.isFinite(Number(a)) && Number.isFinite(Number(b))
+            && Number(a) === Number(b));
+        const sameRate = sameValue(prior.rate, event.rate);
+        const sameMark = sameValue(prior.markPrice, event.markPrice);
         if (!sameRate || !sameMark) fundingComplete = false;
         continue;
       }

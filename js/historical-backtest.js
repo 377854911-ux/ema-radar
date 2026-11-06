@@ -153,7 +153,7 @@ function timeframeConfig(config, timeframe) {
  * portfolio simulator. A signal is considered only when its following candle
  * exists; the signal candle itself must already be closed.
  */
-export function runHistoricalBacktest(dataset, config = {}, options = {}) {
+export async function runHistoricalBacktest(dataset, config = {}, options = {}) {
   validateDataset(dataset);
   const initialCapital = Number(config.initialCapital ?? 10_000);
   const maxOpenTrades = Number(config.maxOpenTrades ?? 5);
@@ -222,6 +222,8 @@ export function runHistoricalBacktest(dataset, config = {}, options = {}) {
         ...scanStats,
         totalSeries: seriesEntries.filter(([seriesKey]) => seriesKey.endsWith("|" + timeframe)).length
       });
+      // Yield between symbol/timeframe series so mobile browsers can paint live counters.
+      await new Promise(resolve => setTimeout(resolve, 0));
     }
     scanStats.signalsFound += timeframeSignals;
     options.onProgress?.({

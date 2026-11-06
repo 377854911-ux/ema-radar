@@ -202,7 +202,8 @@ export async function fetchKlinesRange({
         await new Promise(resolve => setTimeout(resolve, 500 * (attempt + 1)));
       }
     }
-    if (!Array.isArray(rows) || rows.length === 0) break;
+    if (!Array.isArray(rows)) throw new Error(`Binance returned an invalid kline response for ${symbol} ${interval}`);
+    if (rows.length === 0) break;
     const normalized = rows.map(normalizeKline);
     all.push(...normalized);
     const next = normalized[normalized.length - 1].openTime + 1;
@@ -295,7 +296,8 @@ export async function fetchFundingHistory({
       symbol, startTime: String(cursor), endTime: String(endTime - 1), limit: "1000"
     });
     const rows = await requestJSONWithRetry(`${API}/fapi/v1/fundingRate?${query}`, fetchImpl);
-    if (!rows.length) break;
+    if (!Array.isArray(rows)) throw new Error(`Binance returned an invalid funding response for ${symbol}`);
+    if (rows.length === 0) break;
     for (const row of rows) {
       all.push({
         fundingTime: Number(row.fundingTime),

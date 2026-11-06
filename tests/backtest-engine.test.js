@@ -167,6 +167,44 @@ test("funding is direction-aware and missing funding marks trade incomplete", ()
   assert.equal(missing.netPnl, null);
 });
 
+test("missing standard funding settlements make long-duration trade PnL incomplete", () => {
+  const eightHours = 8 * 60 * 60 * 1000;
+  const data = [
+    { openTime: 0, closeTime: 59_999, open: 98, high: 101, low: 97, close: 100 },
+    { openTime: 60_000, closeTime: eightHours - 1, open: 100, high: 101, low: 99, close: 100 },
+    { openTime: eightHours, closeTime: eightHours + 59_999, open: 100, high: 103, low: 99, close: 102 }
+  ];
+  const missing = simulateTrade({
+    candles: data, signalIndex: 0, direction: "LONG", config: base, fundingEvents: []
+  });
+  assert.equal(missing.status, "incomplete");
+  assert.equal(missing.netPnl, null);
+  assert.equal(missing.reason, "missing_or_ambiguous_funding_data");
+
+  const complete = simulateTrade({
+    candles: data, signalIndex: 0, direction: "LONG", config: base,
+    fundingEvents: [{ fundingTime: eightHours, rate: 0.001, markPrice: 100 }]
+  });
+  assert.equal(complete.status, "closed");
+  assert.equal(complete.fundingPnl, -0.5);
+});
+
+test("open positions crossing a standard funding time require that settlement record", () => {
+  const eightHours = 8 * 60 * 60 * 1000;
+  const data = [
+    { openTime: 0, closeTime: 59_999, open: 98, high: 101, low: 97, close: 100 },
+    { openTime: 60_000, closeTime: eightHours - 1, open: 100, high: 101, low: 99, close: 100 },
+    { openTime: eightHours, closeTime: eightHours + 59_999, open: 100, high: 101, low: 99, close: 100.5 },
+    { openTime: eightHours + 60_000, closeTime: eightHours + 119_999, open: 100.5, high: 101, low: 100, close: 100.5 }
+  ];
+  const result = simulateTrade({
+    candles: data, signalIndex: 0, direction: "LONG", config: base, fundingEvents: []
+  });
+  assert.equal(result.status, "open");
+  assert.equal(result.fundingComplete, false);
+  assert.equal(result.fundingPnl, null);
+});
+
 test("summary excludes incomplete trades from headline statistics", () => {
   const summary = summarizeBacktest([
     { status: "closed", netPnl: 20, exitReason: "take_profit" },

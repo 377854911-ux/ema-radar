@@ -155,7 +155,12 @@ Report exactly:
 
 Ambiguous/unclassifiable trades must be listed separately and excluded from total trades, win rate, and P&L statistics.
 
-Fees, slippage, and funding-fee assumptions must be configurable and saved. Their default values are not yet approved.
+Trading costs:
+- Entry and exit fees are calculated separately; both rates are user-editable and persisted.
+- Slippage is user-editable and persisted. Apply it to market-style exits (stop loss and timeout close); apply a transparent, configurable execution assumption to entries as appropriate for the selected entry type.
+- Retrieve historical funding rates from Binance public market-data endpoints for the symbol and relevant funding timestamps. Apply funding payments/receipts according to position direction and whether the simulated position was open at each funding timestamp.
+- Do not silently substitute zero funding when historical funding data is missing. Flag affected trades/data intervals as incomplete and exclude unclassifiable results from headline statistics, or clearly disclose the limitation.
+- Fee rates and slippage defaults remain editable; do not invent or silently hard-code user-approved default values.
 
 ## 12. Settings and persistence
 
@@ -175,9 +180,8 @@ Fees, slippage, and funding-fee assumptions must be configurable and saved. Thei
 ## 14. Items requiring user confirmation before backtest implementation
 
 
-2. What are the default fee, slippage, and funding assumptions? Prefer editable fields, with transparent defaults.
-3. What integer range should be allowed for hard-stop percentage?
-4. For the auxiliary stop, confirm whether the user selects either option 1 or option 2 (not both simultaneously).
-5. For a same-symbol opposite-direction signal while a position is open: wait until all positions close, then open only if a new fresh signal appears; never reuse an expired signal.
+1. What integer range should be allowed for hard-stop percentage?
+2. For the auxiliary stop, confirm whether the user selects either option 1 or option 2 (not both simultaneously).
+3. For a same-symbol opposite-direction signal while a position is open: wait until all positions close, then open only if a new fresh signal appears; never reuse an expired signal.
 
 No implementation should silently invent answers to these unresolved items.

@@ -128,7 +128,7 @@ export function simulateTrade({ candles, signalIndex, direction, config, funding
   const riskDistance = direction === "LONG"
     ? entryPrice - Math.min(...stopLevels)
     : Math.max(...stopLevels) - entryPrice;
-  if (!(riskDistance > 0)) return { status: "unclassifiable", reason: "auxiliary_stop_not_beyond_entry" };
+  if (!(riskDistance > 0) || (direction === "LONG" && auxiliaryStop >= entryPrice) || (direction === "SHORT" && auxiliaryStop <= entryPrice)) {\n    return { status: "unclassifiable", reason: "auxiliary_stop_not_beyond_entry" };\n  }
   const takeProfit = direction === "LONG" ? entryPrice + riskDistance * rr : entryPrice - riskDistance * rr;
   if (takeProfit <= 0) return { status: "unclassifiable", reason: "invalid_take_profit" };
 
@@ -167,7 +167,7 @@ export function simulateTrade({ candles, signalIndex, direction, config, funding
     }
   }
 
-  if (!exit) return { status: "open", reason: "insufficient_future_candles", entryIndex, entryPrice, hardStop, auxiliaryStop, takeProfit };
+  if (!exit) return {\n    status: "open", reason: "insufficient_future_candles", direction, entryIndex, entryTime, entryPrice, notional, entryFee, hardStop, auxiliaryStop, takeProfit, exitTime: null\n  };
 
   const exitNotional = notional * exit.price / entryPrice;
   const exitFee = fee(exitNotional, config.exitFeeRate);

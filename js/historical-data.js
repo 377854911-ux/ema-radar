@@ -17,9 +17,39 @@ import { EMA_WARMUP_BARS } from "./ema-engine.js";
 const API = "https://fapi.binance.com";
 const DAY = 86_400_000;
 const MAX_KLINES = 1500;
+// One shared gate for every public-data endpoint. Even sequential downloads can
+// exceed the IP request budget when hundreds of symbols/timeframes are queued.
+const MIN_REQUEST_INTERVAL_MS = 350;
+const RATE_LIMIT_COOLDOWN_MS = 10_000;
+let nextRequestAt = 0;
+let rateLimitUntil = 0;
+let requestQueue = Promise.resolve();
 export { EMA_WARMUP_BARS };
 
+async function waitForRequestSlot() {
+  let release;
+  const previous = requestQueue;
+  requestQueue = new Promise(resolve => { release = resolve; });
+  await previous;
+  try {
+    const now = Date.now();
+    const waitMs = Math.max(0, rateLimitUntil - now, nextRequestAt - now);
+    if (waitMs) await new Promise(resolve => setTimeout(resolve, waitMs));
+    nextRequestAt = Date.now() + MIN_REQUEST_INTERVAL_MS;
+  } finally {
+    release();
+  }
+}
+
+function noteRateLimit(error) {
+  const retryMs = Number.isFinite(error?.retryAfterMs)
+    ? error.retryAfterMs
+    : (error?.status === 418 ? 120_000 : RATE_LIMIT_COOLDOWN_MS);
+  rateLimitUntil = Math.max(rateLimitUntil, Date.now() + retryMs);
+}
+
 async function requestJSON(url, fetchImpl = fetch) {
+  await waitForRequestSlot();
   const response = await fetchImpl(url, { headers: { Accept: "application/json" } });
   if (!response.ok) {
     const error = new Error(`Binance API ${response.status}`);
@@ -30,6 +60,10 @@ async function requestJSON(url, fetchImpl = fetch) {
       const retryAt = Date.parse(retryAfter);
       if (Number.isFinite(seconds) && seconds >= 0) error.retryAfterMs = seconds * 1000;
       else if (Number.isFinite(retryAt)) error.retryAfterMs = Math.max(0, retryAt - Date.now());
+    }
+    if (response.status === 429 || response.status === 418) noteRateLimit(error);
+    if (response.status === 418) {
+      error.message = "Binance API 418：当前网络出口 IP 可能已被临时限制。已停止请求，请等待封禁解除后再试；不要连续重试。";
     }
     throw error;
   }
@@ -154,10 +188,11 @@ function retryDelayMs(error, attempt, baseDelay = 1500) {
   if (Number.isFinite(error?.retryAfterMs)) return error.retryAfterMs;
   // Exponential backoff with a cap prevents repeated 429/418 requests from
   // extending a Binance IP rate limit.
-  return Math.min(30_000, baseDelay * (2 ** attempt));
+  return Math.min(60_000, Math.max(5_000, baseDelay * (2 ** attempt)));
 }
 function isRetryableRequestError(error) {
-  return !error?.status || error.status === 418 || error.status === 429 || error.status >= 500;
+  // HTTP 418 is an IP ban, not a transient request failure. Never retry it.
+  return !error?.status || error.status === 429 || error.status >= 500;
 }
 
 async function requestJSONWithRetry(url, fetchImpl = fetch, retries = 6) {

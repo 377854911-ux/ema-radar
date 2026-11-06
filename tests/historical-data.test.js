@@ -147,7 +147,11 @@ test("retries temporary funding endpoint rate limits", async () => {
     endTime: 1000,
     fetchImpl: async () => {
       calls++;
-      if (calls === 1) return { ok: false, status: 429, json: async () => ({}) };
+      if (calls === 1) return {
+        ok: false, status: 429,
+        headers: { get: name => name === "Retry-After" ? "0" : null },
+        json: async () => ({})
+      };
       return {
         ok: true,
         json: async () => [{
@@ -159,6 +163,22 @@ test("retries temporary funding endpoint rate limits", async () => {
   assert.equal(calls, 2);
   assert.equal(events.length, 1);
   assert.equal(events[0].rate, 0.0001);
+});
+
+test("stops immediately on Binance HTTP 418 instead of retrying an IP ban", async () => {
+  let calls = 0;
+  await assert.rejects(() => fetchFundingHistory({
+    symbol: "TESTUSDT", startTime: 100, endTime: 1000,
+    fetchImpl: async () => {
+      calls++;
+      return {
+        ok: false, status: 418,
+        headers: { get: () => null },
+        json: async () => ({})
+      };
+    }
+  }), /Binance API 418/);
+  assert.equal(calls, 1);
 });
 
 test("builds the daily trading universe with one prior completed UTC day", async () => {

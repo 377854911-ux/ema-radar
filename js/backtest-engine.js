@@ -148,9 +148,14 @@ export function simulateTrade({ candles, signalIndex, direction, config, funding
       ? stopLevels.some(level => c.low <= level)
       : stopLevels.some(level => c.high >= level);
     const tpTouched = direction === "LONG" ? c.high >= takeProfit : c.low <= takeProfit;
+    // A stop crossed by the candle open is already triggered at the open;
+    // later movement through the target cannot make the order ambiguous.
+    const stopGappedAtOpen = stopLevels.some(level =>
+      direction === "LONG" ? c.open <= level : c.open >= level
+    );
 
     const targetCanBeEvaluated = !(config.entryMethod === "retracement_limit" && i === entryIndex);
-    if (stopTouched && tpTouched && targetCanBeEvaluated) {
+    if (stopTouched && tpTouched && targetCanBeEvaluated && !stopGappedAtOpen) {
       // OHLC data cannot reveal which level was reached first. Per user rule,
       // offset the gross outcome to zero; entry/exit fees and funding still apply.
       exit = {

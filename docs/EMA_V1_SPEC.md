@@ -58,7 +58,7 @@ Smaller distance_rate ranks ahead of larger distance_rate. This is a ranking rul
 ## 5. Timeframes and scanning
 
 Supported timeframes:
-- 10m, 15m, 30m, 1h, 2h, 4h, 6h, 8h, 12h, 1d.
+- 15m, 30m, 1h, 2h, 4h, 6h, 8h, 12h, 1d.
 
 - Each timeframe is independently selectable; users may select one, several, or all.
 - No timeframe resonance is required.

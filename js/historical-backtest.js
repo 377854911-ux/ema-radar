@@ -183,6 +183,9 @@ export async function runHistoricalBacktest(dataset, config = {}, options = {}) 
     missingSeries: []
   };
   const seriesEntries = Object.entries(dataset.candlesBySymbolTimeframe);
+  const totalSeriesCount = seriesEntries.filter(([key]) =>
+    selectedTimeframes.includes(key.slice(key.lastIndexOf("|") + 1))
+  ).length;
 
   for (const timeframe of selectedTimeframes) {
     const settings = timeframeConfig(config, timeframe);
@@ -199,7 +202,8 @@ export async function runHistoricalBacktest(dataset, config = {}, options = {}) 
           phase: "series-scan",
           timeframe,
           ...scanStats,
-          totalSeries: seriesEntries.filter(([seriesKey]) => seriesKey.endsWith("|" + timeframe)).length
+          totalSeries: seriesEntries.filter(([seriesKey]) => seriesKey.endsWith("|" + timeframe)).length,
+          totalSeriesCount
         });
         await new Promise(resolve => setTimeout(resolve, 0));
         continue;
@@ -227,7 +231,8 @@ export async function runHistoricalBacktest(dataset, config = {}, options = {}) 
         phase: "series-scan",
         timeframe,
         ...scanStats,
-        totalSeries: seriesEntries.filter(([seriesKey]) => seriesKey.endsWith("|" + timeframe)).length
+        totalSeries: seriesEntries.filter(([seriesKey]) => seriesKey.endsWith("|" + timeframe)).length,
+        totalSeriesCount
       });
       // Yield between symbol/timeframe series so mobile browsers can paint live counters.
       await new Promise(resolve => setTimeout(resolve, 0));
@@ -243,6 +248,7 @@ export async function runHistoricalBacktest(dataset, config = {}, options = {}) 
       closedTrades: partialPortfolio.accepted.filter(item => item.status === "closed").length,
       openTrades: partialPortfolio.accepted.filter(item => item.status === "open").length,
       acceptedTrades: partialPortfolio.accepted.length,
+      totalSeriesCount,
       ...scanStats
     });
     options.onProgress?.({
@@ -250,6 +256,7 @@ export async function runHistoricalBacktest(dataset, config = {}, options = {}) 
       timeframe,
       completedTimeframes: selectedTimeframes.indexOf(timeframe) + 1,
       totalTimeframes: selectedTimeframes.length,
+      totalSeriesCount,
       ...scanStats
     });
   }

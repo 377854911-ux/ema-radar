@@ -1,0 +1,8 @@
+{
+  "name": "ema-radar-v1",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test"
+  }
+}

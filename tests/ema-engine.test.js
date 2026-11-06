@@ -1,13 +1,13 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { calculateEMA, analyzeLatestClosedSignal, rankAndDeduplicateSignals } from "../js/ema-engine.js";
+import { calculateEMA, analyzeLatestClosedSignal, rankAndDeduplicateSignals, EMA_WARMUP_BARS } from "../js/ema-engine.js";
 
 function makeCandle(openTime, open, high, low, close, closeTime = openTime + 59_999) {
   return [openTime, String(open), String(high), String(low), String(close), "0", closeTime];
 }
 
 function risingHistory() {
-  return Array.from({ length: 100 }, (_, i) => {
+  return Array.from({ length: EMA_WARMUP_BARS }, (_, i) => {
     const close = 100 + i * 0.1;
     return makeCandle(i * 60_000, close - 0.02, close + 0.03, close - 0.03, close);
   });
@@ -35,7 +35,7 @@ test("insufficient candles do not create a signal", () => {
   assert.equal(result.reason, "not_enough_candles");
 });
 
-test("detects a bullish candle containing all three EMAs with EMA100 lowest", () => {
+test("detects a bullish candle containing all three EMAs with EMA100 lowest after 500 warm-up bars", () => {
   const candles = risingHistory();
   const closes = candles.map(row => Number(row[4]));
   const e25 = calculateEMA(closes, 25).at(-1);
@@ -43,15 +43,15 @@ test("detects a bullish candle containing all three EMAs with EMA100 lowest", ()
   const e100 = calculateEMA(closes, 100).at(-1);
   const open = e100 - 1;
   const close = Math.max(e25, e50, e100) + 1;
-  candles.push(makeCandle(6_000_000, open, close + 0.1, open - 0.1, close));
-  candles.push(makeCandle(6_060_000, close, close + 0.2, close - 0.2, close + 0.1));
+  candles.push(makeCandle(30_000_000, open, close + 0.1, open - 0.1, close));
+  candles.push(makeCandle(30_060_000, close, close + 0.2, close - 0.2, close + 0.1));
   const result = analyzeLatestClosedSignal(candles, { timeframe: "1m" });
   assert.equal(result.signal?.direction, "LONG");
   assert.ok(result.signal.ema100 < result.signal.ema25);
   assert.ok(result.signal.ema100 < result.signal.ema50);
 });
 
-test("detects a bearish candle containing all three EMAs with EMA100 highest", () => {
+test("detects a bearish candle containing all three EMAs with EMA100 highest after 500 warm-up bars", () => {
   const candles = fallingHistory();
   const closes = candles.map(row => Number(row[4]));
   const e25 = calculateEMA(closes, 25).at(-1);
@@ -78,7 +78,7 @@ test("only the latest completed candle can signal; a later completed candle expi
   candles.push(makeCandle(6_000_000, open, close + 0.1, open - 0.1, close));
   candles.push(makeCandle(6_060_000, close, close + 0.2, close - 0.2, close + 0.1));
   assert.equal(analyzeLatestClosedSignal(candles).signal?.direction, "LONG");
-  candles.push(makeCandle(6_120_000, close + 0.1, close + 0.3, close, close + 0.2));
+  candles.push(makeCandle(30_120_000, close + 0.1, close + 0.3, close, close + 0.2));
   assert.equal(analyzeLatestClosedSignal(candles).signal, null);
 });
 

@@ -1,6 +1,27 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { buildDailyUniverse, normalizeKline, fetchBacktestDataset, EMA_WARMUP_BARS, fetchFundingHistory, fetchKlinesRange } from "../js/historical-data.js";
+import { buildDailyUniverse, normalizeKline, fetchBacktestDataset, EMA_WARMUP_BARS, fetchFundingHistory, fetchKlinesRange, createHistoricalCache } from "../js/historical-data.js";
+
+test("historical cache falls back to page memory when IndexedDB is unavailable", async () => {
+  const cache = createHistoricalCache(null);
+  assert.equal(await cache.get("missing"), null);
+  assert.equal(await cache.put("key", [{ close: 123 }]), false);
+  assert.deepEqual(await cache.get("key"), [{ close: 123 }]);
+});
+
+test("historical cache falls back to page memory when IndexedDB open fails", async () => {
+  const brokenIndexedDB = {
+    open() {
+      const request = {};
+      queueMicrotask(() => request.onerror?.());
+      request.error = new Error("storage unavailable");
+      return request;
+    }
+  };
+  const cache = createHistoricalCache(brokenIndexedDB);
+  assert.equal(await cache.put("key", [1, 2, 3]), false);
+  assert.deepEqual(await cache.get("key"), [1, 2, 3]);
+});
 
 test("normalizes Binance kline fields including quote turnover", () => {
   const candle = normalizeKline([0,"100","110","90","105","12",86399999,"1234"]);

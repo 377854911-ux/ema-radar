@@ -6,7 +6,7 @@
 export const EMA_PERIODS = Object.freeze([25, 50, 100]);
 
 export const TIMEFRAME_MINUTES = Object.freeze({
-  "10m": 10, "15m": 15, "30m": 30,
+  "15m": 15, "30m": 30,
   "1h": 60, "2h": 120, "4h": 240,
   "6h": 360, "8h": 480, "12h": 720, "1d": 1440
 });

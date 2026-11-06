@@ -81,10 +81,12 @@ test("market-style exit slippage is adverse and fees are itemized", () => {
 });
 
 test("timeout counts complete candles after entry", () => {
+  const timeoutCandles = candles
+    .map((c, i) => i === 1 ? { ...c, high: 105, close: 104 } : c)
+    .map((c, i) => i === 2 ? { ...c, open: 104, high: 105, low: 103, close: 104 } : c);
   const result = simulateTrade({
-    candles, signalIndex: 0, direction: "LONG",
-    config: { ...base, timeoutBars: 2, rr: 5 },
-    candles: candles.map((c, i) => i === 1 ? { ...c, high: 105 } : c).map((c, i) => i === 2 ? { ...c, high: 105 } : c)
+    candles: timeoutCandles, signalIndex: 0, direction: "LONG",
+    config: { ...base, timeoutBars: 2, rr: 5 }
   });
   assert.equal(result.exitReason, "timeout");
   assert.equal(result.exitIndex, 2);

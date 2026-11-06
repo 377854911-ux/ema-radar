@@ -59,6 +59,15 @@ function makeDataset() {
   };
 }
 
+test("rejects unsupported 10m timeframe at the historical backtest boundary", () => {
+  assert.throws(() => runHistoricalBacktest(makeDataset(), {
+    timeframes: ["10m"],
+    initialCapital: 10_000,
+    maxOpenTrades: 5,
+    tradeConfig
+  }), /Unsupported timeframe: 10m/);
+});
+
 test("only scans symbols in each historical day's top-100 universe", () => {
   const dataset = makeDataset();
   dataset.dailyUniverse = {};

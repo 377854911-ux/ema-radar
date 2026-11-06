@@ -406,3 +406,40 @@ test("funding paid by an existing open position reduces cash before a later entr
     event.type === "open_position_funding"
   ).length, 1);
 });
+
+
+test("later open-position funding cannot alter an earlier losing-exit replenishment", () => {
+  const openShortCandles = [
+    { openTime: 0, closeTime: 9, open: 102, high: 103, low: 99, close: 100 },
+    { openTime: 10, closeTime: 19, open: 100, high: 101, low: 99, close: 100 },
+    { openTime: 20, closeTime: 29, open: 100, high: 101, low: 99, close: 100 },
+    { openTime: 30, closeTime: 39, open: 100, high: 101, low: 99, close: 100 },
+    { openTime: 40, closeTime: 49, open: 100, high: 101, low: 99, close: 100 }
+  ];
+  const losingLongCandles = [
+    { openTime: 0, closeTime: 9, open: 98, high: 101, low: 97, close: 100 },
+    { openTime: 10, closeTime: 19, open: 100, high: 101, low: 97, close: 99 },
+    { openTime: 20, closeTime: 29, open: 99, high: 100, low: 98, close: 99 }
+  ];
+  const result = simulatePortfolio([
+    {
+      symbol: "OPEN_SHORTUSDT", timeframe: "1h", direction: "SHORT",
+      distanceRate: 0.1, candles: openShortCandles, signalIndex: 0,
+      config,
+      fundingEvents: [{ fundingTime: 30, rate: 0.02, markPrice: 100 }]
+    },
+    {
+      symbol: "LOSING_LONGUSDT", timeframe: "1h", direction: "LONG",
+      distanceRate: 0.1, candles: losingLongCandles, signalIndex: 0, config
+    }
+  ], { initialCapital: 1_000 });
+
+  assert.equal(result.accepted.length, 2);
+  assert.equal(result.accepted.find(trade => trade.symbol === "LOSING_LONGUSDT").exitTime, 19);
+  assert.equal(result.accepted.find(trade => trade.symbol === "OPEN_SHORTUSDT").fundingPnl, 10);
+  assert.equal(result.capital.events.find(event => event.type === "loss_replenishment").time, 19);
+  assert.equal(result.capital.events.find(event => event.type === "open_position_funding").time, 30);
+  assert.equal(result.capital.accountBalance, 1_110);
+  const snapshotTypes = result.capital.events.map(event => event.type);
+  assert.ok(snapshotTypes.indexOf("loss_replenishment") < snapshotTypes.indexOf("open_position_funding"));
+});

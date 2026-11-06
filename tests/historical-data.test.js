@@ -47,13 +47,18 @@ test("downloads enough pre-period candles to warm up EMA100", async () => {
         quoteAsset: "USDT", contractStatus: "TRADING"
       }] };
     } else if (url.pathname.endsWith("/klines") && url.searchParams.get("interval") === "1d") {
-      data = [[startTime,"100","110","90","105","10",endTime-1,"1000"]];
+      data = [[startTime - 86_400_000,"100","110","90","105","10",startTime-1,"1000"]];
     }
     return { ok: true, json: async () => data };
   };
   await fetchBacktestDataset({
     startTime, endTime, timeframes: ["15m"], fetchImpl, concurrency: 1
   });
+  const daily = requests.find(url =>
+    url.pathname.endsWith("/klines") && url.searchParams.get("interval") === "1d"
+  );
+  assert.ok(daily);
+  assert.equal(Number(daily.searchParams.get("startTime")), startTime - 86_400_000);
   const intraday = requests.find(url =>
     url.pathname.endsWith("/klines") && url.searchParams.get("interval") === "15m"
   );
@@ -95,4 +100,31 @@ test("retries temporary funding endpoint rate limits", async () => {
   assert.equal(calls, 2);
   assert.equal(events.length, 1);
   assert.equal(events[0].rate, 0.0001);
+});
+
+test("builds the daily trading universe with one prior completed UTC day", async () => {
+  const startTime = 1_800_000_000_000;
+  const endTime = startTime + 86_400_000;
+  const dailyStart = startTime - 86_400_000;
+  const result = await fetchBacktestDataset({
+    startTime, endTime, timeframes: ["15m"], concurrency: 1,
+    fetchImpl: async input => {
+      const url = new URL(input);
+      let data = [];
+      if (url.pathname.endsWith("/exchangeInfo")) {
+        data = { symbols: [{
+          symbol: "TESTUSDT", status: "TRADING", contractType: "PERPETUAL",
+          quoteAsset: "USDT", contractStatus: "TRADING"
+        }] };
+      } else if (url.pathname.endsWith("/klines") && url.searchParams.get("interval") === "1d") {
+        data = [
+          [dailyStart,"100","105","99","104","10",startTime-1,"2000"],
+          [startTime,"104","110","100","108","10",endTime-1,"9000"]
+        ];
+      }
+      return { ok: true, json: async () => data };
+    }
+  });
+  assert.deepEqual(result.dailyUniverse[dailyStart].map(row => row.symbol), ["TESTUSDT"]);
+  assert.ok(!Object.hasOwn(result.dailyUniverse, startTime) || result.dailyUniverse[startTime].length === 0);
 });

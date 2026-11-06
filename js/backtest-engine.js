@@ -132,7 +132,9 @@ export function simulateTrade({ candles, signalIndex, direction, config, funding
   const takeProfit = direction === "LONG" ? entryPrice + riskDistance * rr : entryPrice - riskDistance * rr;
   if (takeProfit <= 0) return { status: "unclassifiable", reason: "invalid_take_profit" };
 
-  const entryTime = config.entryMethod === "signal_close"\n    ? (signal.closeTime ?? signal.openTime)\n    : candles[entryIndex].openTime;
+  const entryTime = config.entryMethod === "signal_close"
+    ? (signal.closeTime ?? signal.openTime)
+    : candles[entryIndex].openTime;
   const entryFee = fee(notional, config.entryFeeRate);
   let exit = null;
   let countedBars = 0;

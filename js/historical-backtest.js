@@ -216,6 +216,12 @@ export function runHistoricalBacktest(dataset, config = {}, options = {}) {
         timeframeSignals += found.length;
         scanStats.candlesEvaluated += Math.max(0, segment.length - 101);
       }
+      options.onProgress?.({
+        phase: "series-scan",
+        timeframe,
+        ...scanStats,
+        totalSeries: seriesEntries.filter(([seriesKey]) => seriesKey.endsWith("|" + timeframe)).length
+      });
     }
     scanStats.signalsFound += timeframeSignals;
     options.onProgress?.({

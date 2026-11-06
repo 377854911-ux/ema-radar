@@ -409,7 +409,7 @@ export function simulatePortfolio(candidates, options = {}) {
       }
     }
     summary.maxDrawdownPct = maxDrawdown;
-    summary.maxDrawdownBasis = "flow_adjusted_mark_to_market_equity";
+    summary.maxDrawdownBasis = "flow_adjusted_bar_close_mark_to_market_equity";
   } else {
     // Incomplete funding makes both cash and mark-to-market equity uncertain.
     summary.maxDrawdownPct = null;

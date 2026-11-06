@@ -180,7 +180,7 @@ export function simulateTrade({ candles, signalIndex, direction, config, funding
       };
       break;
     }
-    if (stopTouched) {
+    if (stopTouched && !takeProfitGappedAtOpen) {
       const touchedStops = stopLevels.filter(level =>
         direction === "LONG" ? c.low <= level : c.high >= level
       );

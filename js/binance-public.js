@@ -95,25 +95,27 @@ export async function scanMarket({
   let completed = 0;
   let failures = 0;
   const results = await mapWithConcurrency(tasks, concurrency, async task => {
-    const candles = await getKlines(task.symbol.symbol ?? task.symbol, task.timeframe, 120);
-    const { signal } = analyzeLatestClosedSignal(candles, {
-      timeframe: task.timeframe,
-      maxBodyPercent: bodyThresholds[task.timeframe]
-    });
-    completed += 1;
-    onProgress({ completed, total: tasks.length, failures });
-    return signal ? {
-      ...signal,
-      symbol: task.symbol.symbol ?? task.symbol,
-      quoteVolume: task.symbol.quoteVolume ?? null,
-      priceChangePercent: task.symbol.priceChangePercent ?? null
-    } : null;
+    try {
+      const candles = await getKlines(task.symbol.symbol ?? task.symbol, task.timeframe, 120);
+      const { signal } = analyzeLatestClosedSignal(candles, {
+        timeframe: task.timeframe,
+        maxBodyPercent: bodyThresholds[task.timeframe]
+      });
+      return signal ? {
+        ...signal,
+        symbol: task.symbol.symbol ?? task.symbol,
+        quoteVolume: task.symbol.quoteVolume ?? null,
+        priceChangePercent: task.symbol.priceChangePercent ?? null
+      } : null;
+    } catch (error) {
+      failures += 1;
+      return { error };
+    } finally {
+      completed += 1;
+      onProgress({ completed, total: tasks.length, failures });
+    }
   });
 
-  for (const result of results) {
-    if (result?.error) failures += 1;
-  }
-  onProgress({ completed, total: tasks.length, failures });
   const signals = results.filter(item => item && !item.error);
   return {
     long: rankAndDeduplicateSignals(signals.filter(item => item.direction === "LONG")),

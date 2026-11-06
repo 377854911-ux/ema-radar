@@ -146,3 +146,31 @@ test("ambiguous same-candle exit pays fees but does not increase the loss streak
   assert.equal(result.capital.events.some(event => event.type === "ambiguous_trade"), true);
   assert.equal(result.capital.events.some(event => event.type === "loss_replenishment"), false);
 });
+
+
+test("realized net profit, fee deductions, funding and account balance reconcile", () => {
+  const result = simulatePortfolio([{
+    symbol: "RECONCILEUSDT",
+    timeframe: "1h",
+    direction: "LONG",
+    distanceRate: 0.1,
+    candles: longCandles(),
+    signalIndex: 0,
+    config: { ...config, entryFeeRate: 0.1, exitFeeRate: 0.1 },
+    fundingEvents: [{ fundingTime: 15, rate: 0.001, markPrice: 100 }]
+  }]);
+
+  const trade = result.accepted[0];
+  assert.equal(trade.status, "closed");
+  assert.equal(trade.grossPnl, 10);
+  assert.equal(trade.entryFee, 0.5);
+  assert.equal(trade.exitFee, 0.51);
+  assert.equal(trade.fundingPnl, -0.5);
+  assert.ok(Math.abs(trade.netPnl - 8.49) < 1e-9);
+  assert.ok(Math.abs(result.summary.totalProfit - 8.49) < 1e-9);
+  assert.equal(result.summary.totalLoss, 0);
+  assert.ok(Math.abs(result.summary.netProfit - trade.netPnl) < 1e-9);
+  assert.ok(Math.abs(result.capital.accountBalance - (result.initialCapital + trade.netPnl)) < 1e-9);
+  assert.equal(result.capital.usedCapital, 0);
+  assert.ok(Math.abs(result.capital.availableBalance - result.capital.accountBalance) < 1e-9);
+});

@@ -4,7 +4,8 @@ import { getFundingRateMap, scanMarket } from "../js/binance-public.js";
 
 test("live scanner excludes both positive and negative high funding rates before fetching klines", async () => {
   const originalFetch = globalThis.fetch;
-  const requestedKlines = [];\n  const requestedLimits = [];
+  const requestedKlines = [];
+  const requestedLimits = [];
   globalThis.fetch = async input => {
     const url = new URL(input);
     if (url.pathname.endsWith("/premiumIndex")) {
@@ -18,7 +19,8 @@ test("live scanner excludes both positive and negative high funding rates before
       };
     }
     if (url.pathname.endsWith("/klines")) {
-      requestedKlines.push(url.searchParams.get("symbol"));\n      requestedLimits.push(url.searchParams.get("limit"));
+      requestedKlines.push(url.searchParams.get("symbol"));
+      requestedLimits.push(url.searchParams.get("limit"));
       return { ok: true, json: async () => [] };
     }
     throw new Error("Unexpected request: " + url);
@@ -32,7 +34,8 @@ test("live scanner excludes both positive and negative high funding rates before
     });
     assert.equal(result.fundingFiltered, 1);
     assert.equal(result.fundingUnavailable, 1);
-    assert.deepEqual(requestedKlines, ["LOWUSDT"]);\n    assert.deepEqual(requestedLimits, ["502"]);
+    assert.deepEqual(requestedKlines, ["LOWUSDT"]);
+    assert.deepEqual(requestedLimits, ["502"]);
     assert.equal(result.scanned, 3);
   } finally {
     globalThis.fetch = originalFetch;

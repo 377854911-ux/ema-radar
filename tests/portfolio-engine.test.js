@@ -103,3 +103,26 @@ test("portfolio skips a trade when its fixed notional exceeds available funds", 
   assert.equal(result.accepted.length, 0);
   assert.equal(result.skipped[0].reason, "insufficient_available_balance");
 });
+
+test("portfolio drawdown follows realized exit order when trades overlap", () => {
+  const slowerWin = [
+    { openTime: 0, closeTime: 9, open: 98, high: 101, low: 97, close: 100 },
+    { openTime: 10, closeTime: 19, open: 100, high: 101, low: 99, close: 100 },
+    { openTime: 20, closeTime: 29, open: 100, high: 101, low: 99, close: 100 },
+    { openTime: 30, closeTime: 39, open: 100, high: 103, low: 99, close: 102 }
+  ];
+  const fasterLoss = [
+    { openTime: 0, closeTime: 9, open: 99, high: 101, low: 98, close: 100 },
+    { openTime: 10, closeTime: 19, open: 98, high: 101, low: 97, close: 100 },
+    { openTime: 20, closeTime: 29, open: 100, high: 101, low: 97, close: 99 },
+    { openTime: 30, closeTime: 39, open: 99, high: 100, low: 98, close: 99 }
+  ];
+  const result = simulatePortfolio([
+    { symbol: "WINUSDT", timeframe: "1h", direction: "LONG", distanceRate: 0.1, candles: slowerWin, signalIndex: 0, config },
+    { symbol: "LOSSUSDT", timeframe: "1h", direction: "LONG", distanceRate: 0.1, candles: fasterLoss, signalIndex: 1, config }
+  ]);
+  assert.equal(result.accepted.length, 2);
+  assert.equal(result.accepted[0].exitTime, 39);
+  assert.equal(result.accepted[1].exitTime, 29);
+  assert.ok(Math.abs(result.summary.maxDrawdownPct - 0.1) < 1e-9);
+});

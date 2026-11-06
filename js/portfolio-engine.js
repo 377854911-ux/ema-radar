@@ -74,7 +74,8 @@ export function simulatePortfolio(candidates, options = {}) {
   const settled = new Set();
   let accountBalance = initialCapital;
   let usedCapital = 0;
-  let cumulativeTopUps = 0;\n  let actualCashInjected = 0;
+  let cumulativeTopUps = 0;
+  let actualCashInjected = 0;
   let lossStreak = 0;
   let capitalAccountingComplete = true;
   const capitalEvents = [];
@@ -207,6 +208,7 @@ export function simulatePortfolio(candidates, options = {}) {
       usedCapital,
       availableBalance: capitalAccountingComplete ? accountBalance - usedCapital : null,
       cumulativeTopUps,
+      actualCashInjected,
       consecutiveLosses: lossStreak,
       capitalAccountingComplete,
       events: capitalEvents

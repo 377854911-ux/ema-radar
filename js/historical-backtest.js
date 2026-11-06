@@ -1,4 +1,4 @@
-import { calculateEMA } from "./ema-engine.js";
+import { calculateEMA, TIMEFRAME_MINUTES } from "./ema-engine.js";
 import { simulatePortfolio } from "./portfolio-engine.js";
 
 export const BACKTEST_PERIOD_DAYS = Object.freeze([7, 30, 60]);
@@ -38,6 +38,24 @@ function validCandle(c) {
     && c.open > 0 && c.low > 0
     && c.high >= Math.max(c.open, c.close)
     && c.low <= Math.min(c.open, c.close);
+}
+
+function splitContiguousCandles(rawCandles, timeframe) {
+  const intervalMs = TIMEFRAME_MINUTES[timeframe] * 60_000;
+  const segments = [];
+  let start = 0;
+  let missingIntervals = 0;
+  for (let i = 1; i < rawCandles.length; i++) {
+    const previous = readCandle(rawCandles[i - 1]);
+    const current = readCandle(rawCandles[i]);
+    if (current.openTime - previous.openTime !== intervalMs) {
+      segments.push(rawCandles.slice(start, i));
+      start = i;
+      missingIntervals++;
+    }
+  }
+  if (rawCandles.length) segments.push(rawCandles.slice(start));
+  return { segments, missingIntervals };
 }
 
 /**
@@ -153,6 +171,7 @@ export function runHistoricalBacktest(dataset, config = {}, options = {}) {
     symbolTimeframeSeries: 0,
     candlesEvaluated: 0,
     signalsFound: 0,
+    missingIntervals: 0,
     missingSeries: []
   };
   const seriesEntries = Object.entries(dataset.candlesBySymbolTimeframe);
@@ -172,12 +191,22 @@ export function runHistoricalBacktest(dataset, config = {}, options = {}) {
       }
       const { maxBodyPercent: _maxBodyPercent, ...tradeOverrides } = settings;
       const tradeConfig = { ...config.tradeConfig, ...tradeOverrides };
-      const found = findSignalsForSeries({
-        symbol, timeframe, rawCandles: candles, dataset, settings, tradeConfig
-      });
-      candidates.push(...found);
-      timeframeSignals += found.length;
-      scanStats.candlesEvaluated += Math.max(0, candles.length - 101);
+      const split = splitContiguousCandles(candles, timeframe);
+      scanStats.missingIntervals += split.missingIntervals;
+      for (const segment of split.segments) {
+        if (segment.length < 102) {
+          if (segment.length) scanStats.missingSeries.push({
+            symbol, timeframe, reason: "contiguous_segment_too_short_after_data_gap"
+          });
+          continue;
+        }
+        const found = findSignalsForSeries({
+          symbol, timeframe, rawCandles: segment, dataset, settings, tradeConfig
+        });
+        candidates.push(...found);
+        timeframeSignals += found.length;
+        scanStats.candlesEvaluated += Math.max(0, segment.length - 101);
+      }
     }
     scanStats.signalsFound += timeframeSignals;
     options.onProgress?.({

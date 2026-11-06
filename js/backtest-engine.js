@@ -224,9 +224,22 @@ export function simulateTrade({ candles, signalIndex, direction, config, funding
   const relevantFunding = [];
   let fundingComplete = true;
   let fundingPnl = 0;
+  const seenFunding = new Map();
   for (const event of fundingEvents) {
     const time = num(event.fundingTime, "fundingTime");
     if (time >= entryTime && time <= exit.time) {
+      const prior = seenFunding.get(time);
+      if (prior) {
+        const sameRate = prior.rate === event.rate
+          || (Number.isFinite(Number(prior.rate)) && Number.isFinite(Number(event.rate))
+            && Number(prior.rate) === Number(event.rate));
+        const sameMark = prior.markPrice === event.markPrice
+          || (Number.isFinite(Number(prior.markPrice)) && Number.isFinite(Number(event.markPrice))
+            && Number(prior.markPrice) === Number(event.markPrice));
+        if (!sameRate || !sameMark) fundingComplete = false;
+        continue;
+      }
+      seenFunding.set(time, event);
       const entryBar = candles[entryIndex];
       const exitBar = candles[exit.index];
       const uncertainEntryTimestamp = time === entryTime;

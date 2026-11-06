@@ -98,6 +98,7 @@ export function simulatePortfolio(candidates, options = {}) {
   const equitySnapshots = [{ time: -Infinity, balance: initialCapital, type: "initial" }];
 
   function applyFundingUntil(timestamp) {
+    const dueEvents = [];
     for (const item of accepted) {
       if (item.trade.fundingComplete !== true) {
         capitalAccountingComplete = false;
@@ -106,17 +107,35 @@ export function simulatePortfolio(candidates, options = {}) {
       const events = item._fundingEvents ?? [];
       while (item._fundingCursor < events.length
           && events[item._fundingCursor].fundingTime <= timestamp) {
-        const event = events[item._fundingCursor++];
-        accountBalance += event.amount;
-        equitySnapshots.push({
-          time: event.fundingTime,
-          balance: accountBalance,
-          type: item.trade.exitTime == null ? "open_position_funding" : "closed_position_funding"
-        });
+        dueEvents.push({ ...events[item._fundingCursor++], item });
+      }
+    }
+    dueEvents.sort((a, b) =>
+      a.fundingTime - b.fundingTime
+      || a.item.candidate.symbol.localeCompare(b.item.candidate.symbol)
+    );
+
+    // All settlements at the same timestamp are one cash-flow batch. This
+    // keeps the equity path independent of candidate/input order.
+    let cursor = 0;
+    while (cursor < dueEvents.length) {
+      const fundingTime = dueEvents[cursor].fundingTime;
+      const batch = [];
+      while (cursor < dueEvents.length && dueEvents[cursor].fundingTime === fundingTime) {
+        batch.push(dueEvents[cursor++]);
+      }
+      accountBalance += batch.reduce((sum, event) => sum + event.amount, 0);
+      equitySnapshots.push({
+        time: fundingTime,
+        balance: accountBalance,
+        type: "funding_settlement_batch"
+      });
+      for (const event of batch) {
         capitalEvents.push({
-          time: event.fundingTime,
-          symbol: item.candidate.symbol,
-          type: item.trade.exitTime == null ? "open_position_funding" : "closed_position_funding",
+          time: fundingTime,
+          symbol: event.item.candidate.symbol,
+          type: event.item.trade.exitTime == null
+            ? "open_position_funding" : "closed_position_funding",
           fundingPnl: event.amount
         });
       }

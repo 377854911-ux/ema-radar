@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { createBacktestRange, runHistoricalBacktest } from "../js/historical-backtest.js";
+import { createBacktestRange, runHistoricalBacktest } from "../js/historical-backtest.js";\nimport { calculateEMA } from "../js/ema-engine.js";
 
 const tradeConfig = {
   entryMethod: "next_open",
@@ -17,7 +17,7 @@ const tradeConfig = {
 
 function makeDataset() {
   const candles = [];
-  for (let i = 0; i < 108; i++) {
+  for (let i = 0; i < 508; i++) {
     const close = 90 + i * 0.1;
     candles.push({
       openTime: i * 900_000,
@@ -48,7 +48,7 @@ function makeDataset() {
   };
   return {
     startTime: 0,
-    endTime: 3 * 86_400_000,
+    endTime: 10 * 86_400_000,
     timeframes: ["15m"],
     dailyUniverse: {
       [0]: [{ symbol: "TESTUSDT", quoteVolume: 1_000_000 }]
@@ -116,7 +116,7 @@ test("connects fresh EMA signals to trade execution and portfolio reporting", as
 test("per-timeframe body threshold can reject an otherwise valid signal", async () => {
   const result = await runHistoricalBacktest(makeDataset(), {
     timeframes: ["15m"],
-    timeframeSettings: { "15m": { maxBodyPercent: 5 } },
+    timeframeSettings: { "15m": { maxBodyPercent: 1 } },
     initialCapital: 10_000,
     maxOpenTrades: 5,
     tradeConfig
@@ -135,7 +135,7 @@ test("rolling period helper only accepts the supported 7/30/60 day periods", asy
 
 test("does not carry EMA signals or trades across missing candle intervals", async () => {
   const dataset = makeDataset();
-  for (let i = 106; i < dataset.candlesBySymbolTimeframe["TESTUSDT|15m"].length; i++) {
+  for (let i = 506; i < dataset.candlesBySymbolTimeframe["TESTUSDT|15m"].length; i++) {
     dataset.candlesBySymbolTimeframe["TESTUSDT|15m"][i].openTime += 900_000;
     dataset.candlesBySymbolTimeframe["TESTUSDT|15m"][i].closeTime += 900_000;
   }
@@ -151,12 +151,12 @@ test("does not carry EMA signals or trades across missing candle intervals", asy
 
 test("reports positions that remain open at the end of the backtest window", async () => {
   const dataset = makeDataset();
-  dataset.candlesBySymbolTimeframe["TESTUSDT|15m"][106] = {
-    openTime: 106 * 900_000, closeTime: 107 * 900_000 - 1,
+  dataset.candlesBySymbolTimeframe["TESTUSDT|15m"][506] = {
+    openTime: 506 * 900_000, closeTime: 507 * 900_000 - 1,
     open: 110, high: 111, low: 109, close: 110.5
   };
-  dataset.candlesBySymbolTimeframe["TESTUSDT|15m"][107] = {
-    openTime: 107 * 900_000, closeTime: 108 * 900_000 - 1,
+  dataset.candlesBySymbolTimeframe["TESTUSDT|15m"][507] = {
+    openTime: 507 * 900_000, closeTime: 508 * 900_000 - 1,
     open: 110.5, high: 112, low: 109, close: 111
   };
   const result = await runHistoricalBacktest(dataset, {
@@ -266,13 +266,13 @@ test("normalizes missing candle close times before signal-close execution", asyn
   });
   assert.equal(result.scanStats.signalsFound, 1);
   assert.equal(result.accepted.length, 1);
-  assert.equal(result.accepted[0].entryTime, 106 * 900_000 - 1);
+  assert.equal(result.accepted[0].entryTime, 506 * 900_000 - 1);
   assert.equal(result.accepted[0].exitReason, "take_profit");
 });
 
 test("breaks the EMA series when a candle close timestamp does not match its timeframe", async () => {
   const dataset = makeDataset();
-  dataset.candlesBySymbolTimeframe["TESTUSDT|15m"][104].closeTime += 1;
+  dataset.candlesBySymbolTimeframe["TESTUSDT|15m"][504].closeTime += 1;
   const result = await runHistoricalBacktest(dataset, {
     timeframes: ["15m"],
     initialCapital: 10_000,

@@ -129,7 +129,7 @@ async function run(){
    if(p.total){$("progress").style.width=Math.min(99,p.completed/p.total*100)+"%";$("status").textContent=stage+"："+p.completed+"/"+p.total+(p.symbol?" · "+p.symbol:"")}
   }});
   $("status").textContent="历史数据准备完成，正在模拟交易…";
-  const result=runHistoricalBacktest(dataset,{initialCapital:10000,maxOpenTrades:5,timeframes:s.timeframes,bodyThresholds:s.bodyThresholds,tradeConfig:{
+  const result=await runHistoricalBacktest(dataset,{initialCapital:10000,maxOpenTrades:5,timeframes:s.timeframes,bodyThresholds:s.bodyThresholds,tradeConfig:{
    entryMethod:s.entryMethod,retracementPct:s.retracementPct===""?undefined:Number(s.retracementPct),limitValidityBars:s.limitValidityBars===""?undefined:Number(s.limitValidityBars),
    hardStopPct:Number(s.hardStopPct),auxiliaryStop:s.auxiliaryStop,rr:Number(s.rr),positionNotional:Number(s.positionNotional),
    entryFeeRate:Number(s.entryFeeRate),exitFeeRate:Number(s.exitFeeRate),entrySlippageRate:Number(s.entrySlippageRate),slippageRate:Number(s.slippageRate),

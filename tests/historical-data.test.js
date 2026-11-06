@@ -47,7 +47,8 @@ test("downloads enough pre-period candles to warm up EMA100", async () => {
         quoteAsset: "USDT", contractStatus: "TRADING"
       }] };
     } else if (url.pathname.endsWith("/klines") && url.searchParams.get("interval") === "1d") {
-      data = [[startTime - 86_400_000,"100","110","90","105","10",startTime-1,"1000"]];
+      const dailyStart = Math.floor(startTime / 86_400_000) * 86_400_000 - 86_400_000;
+      data = [[dailyStart,"100","110","90","105","10",startTime-1,"1000"]];
     }
     return { ok: true, json: async () => data };
   };
@@ -58,7 +59,8 @@ test("downloads enough pre-period candles to warm up EMA100", async () => {
     url.pathname.endsWith("/klines") && url.searchParams.get("interval") === "1d"
   );
   assert.ok(daily);
-  assert.equal(Number(daily.searchParams.get("startTime")), startTime - 86_400_000);
+  assert.equal(Number(daily.searchParams.get("startTime")),
+    Math.floor(startTime / 86_400_000) * 86_400_000 - 86_400_000);
   const intraday = requests.find(url =>
     url.pathname.endsWith("/klines") && url.searchParams.get("interval") === "15m"
   );
@@ -105,7 +107,7 @@ test("retries temporary funding endpoint rate limits", async () => {
 test("builds the daily trading universe with one prior completed UTC day", async () => {
   const startTime = 1_800_000_000_000;
   const endTime = startTime + 86_400_000;
-  const dailyStart = startTime - 86_400_000;
+  const dailyStart = Math.floor(startTime / 86_400_000) * 86_400_000 - 86_400_000;
   const result = await fetchBacktestDataset({
     startTime, endTime, timeframes: ["15m"], concurrency: 1,
     fetchImpl: async input => {
@@ -126,5 +128,5 @@ test("builds the daily trading universe with one prior completed UTC day", async
     }
   });
   assert.deepEqual(result.dailyUniverse[dailyStart].map(row => row.symbol), ["TESTUSDT"]);
-  assert.ok(!Object.hasOwn(result.dailyUniverse, startTime) || result.dailyUniverse[startTime].length === 0);
+  assert.deepEqual(result.dailyUniverse[startTime].map(row => row.symbol), ["TESTUSDT"]);
 });

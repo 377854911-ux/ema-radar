@@ -72,6 +72,9 @@ footer{font-size:11px;color:#71859e;text-align:center;line-height:1.6;padding:12
 <section class="panel">
   <h2>扫描设置</h2>
   <div class="setting-row"><label for="interval">自动扫描间隔</label><select id="interval"><option value="5">5 分钟</option><option value="10">10 分钟</option><option value="15">15 分钟</option><option value="30" selected>30 分钟</option><option value="60">60 分钟</option><option value="120">120 分钟</option></select></div>
+  <div class="setting-row"><label for="fundingFilterPct">高资金费率过滤</label><select id="fundingFilterPct"><option value="0">不过滤</option><option value="0.01">0.01%</option><option value="0.02">0.02%</option><option value="0.03">0.03%</option><option value="0.05">0.05%</option><option value="0.1">0.1%</option><option value="custom">自定义</option></select></div>
+  <div class="setting-row" id="fundingCustomRow" hidden><label for="fundingCustomPct">自定义阈值 (%)</label><input id="fundingCustomPct" type="number" min="0.0001" step="any" inputmode="decimal" placeholder="例如 0.04"></div>
+  <div class="note">按资金费率绝对值过滤多空方向；达到或超过阈值的交易对会被排除。开启过滤时，若币安未返回该交易对的费率，也不会放行信号。</div>
   <div class="note">每个周期可单独设置信号 K 线实体最大涨跌幅。留空表示不启用该过滤；达到或超过阈值的信号会被排除。</div>
   <div id="thresholds"></div>
   <div class="actions"><button id="saveBtn" class="secondary">保存设置</button><button id="allBtn" class="secondary">全选周期</button><button id="clearBtn" class="secondary">清空周期</button></div>
@@ -96,6 +99,8 @@ const STORAGE_KEY = "ema-radar-v1-settings";
 const DEFAULTS = {
   timeframes: ["1h","2h","4h","6h","8h","12h","1d"],
   intervalMinutes: 30,
+  fundingFilterPct: "0",
+  fundingCustomPct: "",
   bodyThresholds: {}
 };
 let settings = loadSettings();
@@ -130,10 +135,19 @@ function renderTimeframes() {
     '<div class="setting-row"><label for="threshold-' + tf + '">' + tf + ' 实体阈值 (%)</label><input id="threshold-' + tf + '" type="number" min="0.01" step="0.01" inputmode="decimal" placeholder="不限制" value="' + (settings.bodyThresholds[tf] ?? "") + '"></div>'
   ).join("");
   $("interval").value = String(settings.intervalMinutes || 30);
+  const presets = ["0","0.01","0.02","0.03","0.05","0.1"];
+  const fundingValue = String(settings.fundingFilterPct ?? "0");
+  $("fundingFilterPct").value = presets.includes(fundingValue) ? fundingValue : "custom";
+  $("fundingCustomPct").value = settings.fundingCustomPct ?? (presets.includes(fundingValue) ? "" : fundingValue);
+  $("fundingCustomRow").hidden = $("fundingFilterPct").value !== "custom";
 }
 function readSettingsFromUI() {
   settings.timeframes = [...timeframeRoot.querySelectorAll("input:checked")].map(input => input.value);
   settings.intervalMinutes = Number($("interval").value) || 30;
+  settings.fundingFilterPct = $("fundingFilterPct").value === "custom"
+    ? $("fundingCustomPct").value.trim()
+    : $("fundingFilterPct").value;
+  settings.fundingCustomPct = $("fundingCustomPct").value.trim();
   const thresholds = {};
   for (const tf of SUPPORTED_TIMEFRAMES) {
     const raw = $("threshold-" + tf).value.trim();
@@ -146,6 +160,11 @@ function readSettingsFromUI() {
 }
 function saveSettings() {
   readSettingsFromUI();
+  const fundingPct = Number(settings.fundingFilterPct);
+  if (!Number.isFinite(fundingPct) || fundingPct < 0) {
+    setStatus("资金费率阈值必须是大于或等于0的数字。");
+    return;
+  }
   localStorage.setItem(STORAGE_KEY, JSON.stringify(settings));
   $("saveStatus").textContent = "设置已保存在这台设备的浏览器中。";
   if (autoTimer) startAutoScan();
@@ -186,6 +205,7 @@ async function scanNow() {
       symbols,
       timeframes: settings.timeframes,
       bodyThresholds: settings.bodyThresholds,
+      fundingFilterPct: Number(settings.fundingFilterPct),
       concurrency: 6,
       onProgress: progress => {
         const pct = progress.total ? progress.completed / progress.total * 100 : 0;
@@ -236,6 +256,9 @@ $("clearBtn").addEventListener("click", () => {
 });
 $("interval").addEventListener("change", () => {
   if (autoTimer) startAutoScan();
+});
+$("fundingFilterPct").addEventListener("change", () => {
+  $("fundingCustomRow").hidden = $("fundingFilterPct").value !== "custom";
 });
 renderTimeframes();
 </script>

@@ -45,13 +45,15 @@ test("funding rate map reads Binance last settled rates for selected symbols", a
     ok: true,
     json: async () => [
       { symbol: "AAAUSDT", lastFundingRate: "0.0001" },
-      { symbol: "BBBUSDT", lastFundingRate: "-0.0002" }
+      { symbol: "BBBUSDT", lastFundingRate: "-0.0002" },
+      { symbol: "NULLUSDT", lastFundingRate: null }
     ]
   });
   try {
     const rates = await getFundingRateMap(["AAAUSDT"]);
     assert.equal(rates.get("AAAUSDT"), 0.0001);
     assert.equal(rates.has("BBBUSDT"), false);
+    assert.equal(rates.get("NULLUSDT"), null);
   } finally {
     globalThis.fetch = originalFetch;
   }

@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { buildDailyUniverse, normalizeKline, fetchBacktestDataset, EMA_WARMUP_BARS } from "../js/historical-data.js";
+import { buildDailyUniverse, normalizeKline, fetchBacktestDataset, EMA_WARMUP_BARS, fetchFundingHistory } from "../js/historical-data.js";
 
 test("normalizes Binance kline fields including quote turnover", () => {
   const candle = normalizeKline([0,"100","110","90","105","12",86399999,"1234"]);
@@ -73,4 +73,26 @@ test("rejects the unsupported 10-minute Binance futures interval", async () => {
     }),
     /Unsupported timeframe: 10m/
   );
+});
+
+test("retries temporary funding endpoint rate limits", async () => {
+  let calls = 0;
+  const events = await fetchFundingHistory({
+    symbol: "TESTUSDT",
+    startTime: 100,
+    endTime: 1000,
+    fetchImpl: async () => {
+      calls++;
+      if (calls === 1) return { ok: false, status: 429, json: async () => ({}) };
+      return {
+        ok: true,
+        json: async () => [{
+          fundingTime: 500, fundingRate: "0.0001", markPrice: "100"
+        }]
+      };
+    }
+  });
+  assert.equal(calls, 2);
+  assert.equal(events.length, 1);
+  assert.equal(events[0].rate, 0.0001);
 });

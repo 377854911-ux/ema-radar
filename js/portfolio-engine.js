@@ -324,7 +324,8 @@ export function simulatePortfolio(candidates, options = {}) {
         time: trade.asOfTime ?? trade.exitTime ?? null,
         symbol: candidate.symbol,
         type: trade.exitTime == null
-          ? "open_position_funding_incomplete"
+          ? (trade.reason === "incomplete_candle_history_after_entry"
+            ? "open_position_data_incomplete" : "open_position_funding_incomplete")
           : "closed_position_funding_incomplete"
       });
     }

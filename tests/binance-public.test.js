@@ -115,15 +115,22 @@ test("live EMA scanner rebuilds its warm-up when incremental candles contain a g
   globalThis.fetch = async input => {
     const url = new URL(input);
     const startTime = url.searchParams.get("startTime");
-    requests.push({ startTime, limit: url.searchParams.get("limit") });
-    if (startTime === null && requests.length === 1) {
-      return { ok: true, json: async () => firstWindow };
+    const limit = url.searchParams.get("limit");
+    requests.push({ startTime, limit });
+    if (limit === "499" && startTime === null && requests.length === 1) {
+      return { ok: true, json: async () => firstWindow.slice(3) };
+    }
+    if (limit === "3" && startTime === String(baseOpenTime)) {
+      return { ok: true, json: async () => firstWindow.slice(0, 3) };
     }
     if (startTime === String(currentOpenTime)) {
       return { ok: true, json: async () => [candle(currentOpenTime + intervalMs)] };
     }
-    if (startTime === null && requests.length === 3) {
-      return { ok: true, json: async () => refreshedWindow };
+    if (limit === "499" && startTime === null && requests.length === 4) {
+      return { ok: true, json: async () => refreshedWindow.slice(3) };
+    }
+    if (limit === "3" && startTime === String(refreshedBase)) {
+      return { ok: true, json: async () => refreshedWindow.slice(0, 3) };
     }
     throw new Error("Unexpected kline request");
   };
@@ -132,11 +139,15 @@ test("live EMA scanner rebuilds its warm-up when incremental candles contain a g
     await scanMarket({ symbols: ["GAPCACHEUSDT"], timeframes: ["15m"], concurrency: 1 });
     fakeNow = currentOpenTime + intervalMs + 1000;
     await scanMarket({ symbols: ["GAPCACHEUSDT"], timeframes: ["15m"], concurrency: 1 });
-    assert.equal(requests.length, 3);
-    assert.equal(requests[0].limit, "502");
-    assert.equal(requests[1].startTime, String(currentOpenTime));
-    assert.equal(requests[2].startTime, null);
-    assert.equal(requests[2].limit, "502");
+    assert.equal(requests.length, 5);
+    assert.equal(requests[0].limit, "499");
+    assert.equal(requests[1].limit, "3");
+    assert.equal(requests[1].startTime, String(baseOpenTime));
+    assert.equal(requests[2].startTime, String(currentOpenTime));
+    assert.equal(requests[3].limit, "499");
+    assert.equal(requests[3].startTime, null);
+    assert.equal(requests[4].limit, "3");
+    assert.equal(requests[4].startTime, String(refreshedBase));
   } finally {
     globalThis.fetch = originalFetch;
     Date.now = originalNow;

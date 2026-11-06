@@ -195,7 +195,11 @@ export function simulatePortfolio(candidates, options = {}) {
     timeframe: x.candidate.timeframe,
     distanceRate: x.candidate.distanceRate
   }));
-  const summary = summarizeBacktest(completedTrades, initialCapital);
+  // Compute equity drawdown in realized exit chronology, not entry order.
+  const realizedInExitOrder = [...completedTrades]
+    .filter(trade => trade.exitTime != null)
+    .sort((a, b) => a.exitTime - b.exitTime);
+  const summary = summarizeBacktest(realizedInExitOrder, initialCapital);
   summary.totalCapitalReplenished = cumulativeTopUps;
   summary.capitalAccountingComplete = capitalAccountingComplete;
 

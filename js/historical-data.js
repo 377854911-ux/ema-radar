@@ -150,20 +150,24 @@ export function createHistoricalCache(indexedDBImpl = globalThis.indexedDB) {
   };
 }
 
-function retryDelayMs(error, attempt, baseDelay = 400) {
-  return Number.isFinite(error?.retryAfterMs)
-    ? error.retryAfterMs
-    : baseDelay * (attempt + 1);
+function retryDelayMs(error, attempt, baseDelay = 1500) {
+  if (Number.isFinite(error?.retryAfterMs)) return error.retryAfterMs;
+  // Exponential backoff with a cap prevents repeated 429/418 requests from
+  // extending a Binance IP rate limit.
+  return Math.min(30_000, baseDelay * (2 ** attempt));
+}
+function isRetryableRequestError(error) {
+  return !error?.status || error.status === 418 || error.status === 429 || error.status >= 500;
 }
 
-async function requestJSONWithRetry(url, fetchImpl = fetch, retries = 3) {
+async function requestJSONWithRetry(url, fetchImpl = fetch, retries = 6) {
   let lastError;
   for (let attempt = 0; attempt < retries; attempt++) {
     try {
       return await requestJSON(url, fetchImpl);
     } catch (error) {
       lastError = error;
-      if (error.status && error.status !== 429 && error.status < 500) throw error;
+      if (!isRetryableRequestError(error)) throw error;
       if (attempt === retries - 1) throw lastError;
       await new Promise(resolve => setTimeout(resolve, retryDelayMs(error, attempt)));
     }
@@ -185,7 +189,7 @@ async function mapLimit(items, concurrency, worker) {
 
 export async function fetchKlinesRange({
   symbol, interval, startTime, endTime, cache = createHistoricalCache(),
-  fetchImpl = fetch, concurrencyRetries = 3
+  fetchImpl = fetch, concurrencyRetries = 6
 }) {
   if (!symbol || !interval) throw new TypeError("symbol and interval are required");
   if (!Number.isFinite(startTime) || !Number.isFinite(endTime) || endTime <= startTime) {
@@ -210,7 +214,7 @@ export async function fetchKlinesRange({
         break;
       } catch (error) {
         lastError = error;
-        if (error.status && error.status !== 429 && error.status < 500) throw error;
+        if (!isRetryableRequestError(error)) throw error;
         if (attempt === concurrencyRetries - 1) throw lastError;
         await new Promise(resolve => setTimeout(resolve, retryDelayMs(error, attempt, 500)));
       }
@@ -242,7 +246,7 @@ export async function fetchKlinesRange({
 }
 
 export async function fetchCurrentUsdtPerpetualSymbols(fetchImpl = fetch) {
-  const info = await requestJSON(`${API}/fapi/v1/exchangeInfo`, fetchImpl);
+  const info = await requestJSONWithRetry(`${API}/fapi/v1/exchangeInfo`, fetchImpl, 6);
   return (info.symbols || []).filter(s =>
     s.status === "TRADING" && s.contractType === "PERPETUAL"
     && s.quoteAsset === "USDT" && s.symbol.endsWith("USDT")
@@ -251,7 +255,7 @@ export async function fetchCurrentUsdtPerpetualSymbols(fetchImpl = fetch) {
 }
 
 export async function buildHistoricalTop100({
-  startTime, endTime, symbols, concurrency = 4, cache = createHistoricalCache(),
+  startTime, endTime, symbols, concurrency = 1, cache = createHistoricalCache(),
   fetchImpl = fetch, onProgress = () => {}
 }) {
   const list = symbols || await fetchCurrentUsdtPerpetualSymbols(fetchImpl);
@@ -365,7 +369,7 @@ const INTERVAL_MS = Object.freeze({
  * that appear in at least one applicable historical top-100 list.
  */
 export async function fetchBacktestDataset({
-  startTime, endTime, timeframes, concurrency = 4, cache = createHistoricalCache(),
+  startTime, endTime, timeframes, concurrency = 1, cache = createHistoricalCache(),
   fetchImpl = fetch, onProgress = () => {}
 }) {
   if (!Array.isArray(timeframes) || timeframes.length === 0) {

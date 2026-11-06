@@ -51,6 +51,21 @@ function fee(notional, rate) {
   return notional * r;
 }
 
+const STANDARD_FUNDING_INTERVAL_MS = 8 * 60 * 60 * 1000;
+
+// Binance's standard funding schedule is 00:00, 08:00 and 16:00 UTC.
+// Missing any expected settlement makes the trade's funding PnL incomplete.
+function hasStandardFundingCoverage(events, startTime, endTime) {
+  const expectedInterval = STANDARD_FUNDING_INTERVAL_MS;
+  let expectedTime = Math.ceil(startTime / expectedInterval) * expectedInterval;
+  while (expectedTime <= endTime) {
+    const found = events.some(event => Number(event.fundingTime) === expectedTime);
+    if (!found) return false;
+    expectedTime += expectedInterval;
+  }
+  return true;
+}
+
 /**
  * Simulates one candidate signal. The caller/portfolio layer is responsible
  * for selecting historical top-100 symbols, signal freshness and concurrency.
@@ -227,7 +242,7 @@ export function simulateTrade({ candles, signalIndex, direction, config, funding
     const asOfTime = candles[candles.length - 1].closeTime
       ?? candles[candles.length - 1].openTime;
     const openFundingEvents = [];
-    let openFundingComplete = true;
+    let openFundingComplete = hasStandardFundingCoverage(fundingEvents, entryTime, asOfTime);
     let openFundingPnl = 0;
     const seenOpenFunding = new Map();
     for (const event of fundingEvents) {
@@ -281,7 +296,7 @@ export function simulateTrade({ candles, signalIndex, direction, config, funding
     ? notional * (exit.price - entryPrice) / entryPrice
     : notional * (entryPrice - exit.price) / entryPrice;
   const relevantFunding = [];
-  let fundingComplete = true;
+  let fundingComplete = hasStandardFundingCoverage(fundingEvents, entryTime, exit.time);
   let fundingPnl = 0;
   const seenFunding = new Map();
   for (const event of fundingEvents) {

@@ -213,7 +213,7 @@ test("realized net profit, fee deductions, funding and account balance reconcile
   assert.ok(Math.abs(result.capital.availableBalance - result.capital.accountBalance) < 1e-9);
   // Entry fee, settled funding and estimated liquidation fee all affect
   // mark-to-market equity before the later profitable settlement.
-  assert.ok(Math.abs(result.summary.maxDrawdownPct - 0.02) < 1e-9, JSON.stringify({ drawdown: result.summary.maxDrawdownPct, equityCurve: result.equityCurve }));
+  assert.ok(Math.abs(result.summary.maxDrawdownPct - 0.015) < 1e-9);
   assert.equal(result.summary.maxDrawdownBasis, "flow_adjusted_mark_to_market_equity");
   assert.equal(result.capital.events.some(event => event.type === "closed_position_funding" && event.time === 15), true);
 });

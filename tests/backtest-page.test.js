@@ -14,5 +14,6 @@ test("historical backtest page contains syntactically valid module script", () =
 test("backtest page persists its own settings separately from scanner settings", () => {
   const html = readFileSync(new URL("../backtest.html", import.meta.url), "utf8");
   assert.match(html, /ema-radar-v1-backtest-settings/);
+  assert.match(html, /1 : 1\\.1/);
   assert.match(html, /localStorage\.setItem\(KEY,JSON\.stringify\(settings\)\)/);
 });

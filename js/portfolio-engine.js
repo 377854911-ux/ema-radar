@@ -92,7 +92,37 @@ export function simulatePortfolio(candidates, options = {}) {
   // excluded, while entry fees are reflected as soon as the position opens.
   const equitySnapshots = [{ time: -Infinity, balance: initialCapital, type: "initial" }];
 
+  function applyOpenFundingUntil(timestamp) {
+    for (const item of accepted) {
+      if (item.trade.exitTime != null) continue;
+      if (item.trade.fundingComplete !== true) {
+        capitalAccountingComplete = false;
+        continue;
+      }
+      const events = item._openFundingEvents ?? [];
+      while (item._openFundingCursor < events.length
+          && events[item._openFundingCursor].fundingTime <= timestamp) {
+        const event = events[item._openFundingCursor++];
+        accountBalance += event.amount;
+        equitySnapshots.push({
+          time: event.fundingTime,
+          balance: accountBalance,
+          type: "open_position_funding"
+        });
+        capitalEvents.push({
+          time: event.fundingTime,
+          symbol: item.candidate.symbol,
+          type: "open_position_funding",
+          fundingPnl: event.amount
+        });
+      }
+    }
+  }
+
   function settleUntil(timestamp) {
+    // Funding paid/received by existing open positions must affect available
+    // cash before deciding whether a later candidate can be opened.
+    applyOpenFundingUntil(timestamp);
     const due = accepted
       .filter(item => !settled.has(item) && item.trade.exitTime != null && item.trade.exitTime <= timestamp)
       .sort((a, b) => a.trade.exitTime - b.trade.exitTime || a.candidate._index - b.candidate._index);
@@ -255,38 +285,28 @@ export function simulatePortfolio(candidates, options = {}) {
       type: "entry_fee"
     });
     usedCapital += trade.notional;
+    if (trade.exitTime == null) {
+      item._openFundingEvents = trade.fundingComplete === true
+        ? [...(trade.fundingEvents ?? [])].sort((a, b) => a.fundingTime - b.fundingTime)
+        : [];
+      item._openFundingCursor = 0;
+      if (trade.fundingComplete !== true || !Number.isFinite(trade.fundingPnl)) {
+        capitalAccountingComplete = false;
+        capitalEvents.push({
+          time: trade.asOfTime ?? null,
+          symbol: candidate.symbol,
+          type: "open_position_funding_incomplete"
+        });
+      }
+    }
     accepted.push(item);
   }
 
   settleUntil(Infinity);
 
-  // Positions still open at the end of the downloaded history keep their
-  // notional reserved. Apply only known funding cash flows through the final
-  // candle; do not mark unrealized price PnL as realized account profit.
-  for (const item of accepted.filter(x => x.trade.exitTime == null)) {
-    const trade = item.trade;
-    if (trade.fundingComplete !== true || !Number.isFinite(trade.fundingPnl)) {
-      capitalAccountingComplete = false;
-      capitalEvents.push({
-        time: trade.asOfTime ?? null,
-        symbol: item.candidate.symbol,
-        type: "open_position_funding_incomplete"
-      });
-      continue;
-    }
-    accountBalance += trade.fundingPnl;
-    equitySnapshots.push({
-      time: trade.asOfTime ?? Infinity,
-      balance: accountBalance,
-      type: "open_position_funding"
-    });
-    capitalEvents.push({
-      time: trade.asOfTime ?? null,
-      symbol: item.candidate.symbol,
-      type: "open_position_funding",
-      fundingPnl: trade.fundingPnl
-    });
-  }
+  // Flush funding settlements for all remaining open positions at the end
+  // of the simulated timeline. Unrealized price PnL remains excluded.
+  applyOpenFundingUntil(Infinity);
 
   const completedTrades = accepted.map(x => ({
     ...x.trade,

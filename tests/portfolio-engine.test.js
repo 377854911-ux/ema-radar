@@ -127,7 +127,7 @@ test("consecutive-loss replenishment resets to base plus the scheduled bonus", (
   // External replenishments do not reset the strategy-equity peak.
   assert.ok(Math.abs(result.summary.maxDrawdownPct - 0.2) < 1e-9);
   assert.equal(result.capital.actualCashWithdrawn, 0);
-  assert.equal(result.summary.maxDrawdownBasis, "flow_adjusted_mark_to_market_equity");
+  assert.equal(result.summary.maxDrawdownBasis, "flow_adjusted_bar_close_mark_to_market_equity");
 });
 
 test("portfolio skips a trade when its fixed notional exceeds available funds", () => {
@@ -214,7 +214,7 @@ test("realized net profit, fee deductions, funding and account balance reconcile
   // Entry fee, settled funding and estimated liquidation fee all affect
   // mark-to-market equity before the later profitable settlement.
   assert.ok(Math.abs(result.summary.maxDrawdownPct - 0.015) < 1e-9);
-  assert.equal(result.summary.maxDrawdownBasis, "flow_adjusted_mark_to_market_equity");
+  assert.equal(result.summary.maxDrawdownBasis, "flow_adjusted_bar_close_mark_to_market_equity");
   assert.equal(result.capital.events.some(event => event.type === "closed_position_funding" && event.time === 15), true);
 });
 
@@ -237,7 +237,7 @@ test("open-position unrealized loss is included in flow-adjusted maximum drawdow
 
   assert.equal(result.accepted[0].status, "open");
   assert.ok(Math.abs(result.summary.maxDrawdownPct - 0.05) < 1e-9);
-  assert.equal(result.summary.maxDrawdownBasis, "flow_adjusted_mark_to_market_equity");
+  assert.equal(result.summary.maxDrawdownBasis, "flow_adjusted_bar_close_mark_to_market_equity");
 });
 
 test("external replenishment is excluded from equity growth and drawdown peaks", () => {

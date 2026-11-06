@@ -1,6 +1,6 @@
 # EMA Radar V1 — Development Specification
 
-Status: implementation in progress; EMA signal engine, first mobile scanner interface, single-trade execution engine, and portfolio scheduling/capital simulation are committed on the rebuild branch and covered by automated unit tests. Historical data orchestration, daily top-100 universe reconstruction, report integration, settings export/import, and iPhone backtest UI remain in progress. Not deployed to production.
+Status: implementation in progress; EMA signal engine, mobile scanner, historical data orchestration, daily top-100 reconstruction, historical EMA backtest runner, single-trade execution, portfolio/capital simulation, and a separate mobile backtest page are committed on the rebuild branch. Automated tests cover the signal/data/trade pipeline and backtest page script syntax. Settings export/import, real-world large-period performance validation, and final end-to-end iPhone testing remain in progress. Not deployed to production.
 Target branch: `rebuild/ema-v1`
 Production branch: `main` (must not be changed during development)
 

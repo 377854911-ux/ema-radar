@@ -1,4 +1,4 @@
-import { calculateEMA, TIMEFRAME_MINUTES } from "./ema-engine.js";
+import { calculateEMA, TIMEFRAME_MINUTES, EMA_WARMUP_BARS } from "./ema-engine.js";
 import { simulatePortfolio } from "./portfolio-engine.js";
 import { isFundingRateAllowed, latestKnownFundingRate } from "./funding-filter.js";
 
@@ -87,7 +87,7 @@ function findSignalsForSeries({
       candle.closeTime = candle.openTime + intervalMs - 1;
     }
   }
-  if (candles.length < 102) return [];
+  if (candles.length < EMA_WARMUP_BARS + 2) return [];
   const closes = candles.map(c => c.close);
   const ema25 = calculateEMA(closes, 25);
   const ema50 = calculateEMA(closes, 50);
@@ -95,7 +95,7 @@ function findSignalsForSeries({
   const signals = [];
   const maxBodyPercent = settings.maxBodyPercent;
 
-  for (let i = 100; i < candles.length - 1; i++) {
+  for (let i = EMA_WARMUP_BARS; i < candles.length - 1; i++) {
     const signalCandle = candles[i];
     const nextCandle = candles[i + 1];
     const timestamp = signalCandle.openTime;
@@ -244,7 +244,7 @@ export async function runHistoricalBacktest(dataset, config = {}, options = {}) 
       const seriesTimeframe = key.slice(separator + 1);
       if (seriesTimeframe !== timeframe) continue;
       scanStats.symbolTimeframeSeries++;
-      if (!Array.isArray(candles) || candles.length < 102) {
+      if (!Array.isArray(candles) || candles.length < EMA_WARMUP_BARS + 2) {
         scanStats.missingSeries.push({ symbol, timeframe, reason: "insufficient_candles" });
         options.onProgress?.({
           phase: "series-scan",
@@ -261,7 +261,7 @@ export async function runHistoricalBacktest(dataset, config = {}, options = {}) 
       const split = splitContiguousCandles(candles, timeframe);
       scanStats.missingIntervals += split.missingIntervals;
       for (const segment of split.segments) {
-        if (segment.length < 102) {
+        if (segment.length < EMA_WARMUP_BARS + 2) {
           if (segment.length) scanStats.missingSeries.push({
             symbol, timeframe, reason: "contiguous_segment_too_short_after_data_gap"
           });
@@ -278,7 +278,7 @@ export async function runHistoricalBacktest(dataset, config = {}, options = {}) 
         });
         candidates.push(...found);
         timeframeSignals += found.length;
-        scanStats.candlesEvaluated += Math.max(0, segment.length - 101);
+        scanStats.candlesEvaluated += Math.max(0, segment.length - EMA_WARMUP_BARS - 1);
       }
       options.onProgress?.({
         phase: "series-scan",

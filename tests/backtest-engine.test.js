@@ -355,3 +355,10 @@ test("limit-entry timeout starts after the partial fill candle", () => {
   assert.equal(result.exitReason, "timeout");
   assert.equal(result.exitIndex, 2);
 });
+
+test("rejects a candle close timestamp earlier than its open timestamp", () => {
+  const invalid = candles.map((c, i) => i === 1 ? { ...c, closeTime: c.openTime - 1 } : c);
+  assert.throws(() => simulateTrade({
+    candles: invalid, signalIndex: 0, direction: "LONG", config: base
+  }), /closeTime cannot be before openTime/);
+});

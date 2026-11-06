@@ -51,7 +51,7 @@ function makeDataset() {
     endTime: 3 * 86_400_000,
     timeframes: ["15m"],
     dailyUniverse: {
-      [86_400_000]: [{ symbol: "TESTUSDT", quoteVolume: 1_000_000 }]
+      [0]: [{ symbol: "TESTUSDT", quoteVolume: 1_000_000 }]
     },
     candlesBySymbolTimeframe: { "TESTUSDT|15m": candles },
     fundingBySymbol: { TESTUSDT: [] },
@@ -68,7 +68,20 @@ test("rejects unsupported 10m timeframe at the historical backtest boundary", ()
   }), /Unsupported timeframe: 10m/);
 });
 
-test("only scans symbols in each historical day's top-100 universe", () => {
+test("uses the preceding completed UTC day's top-100 universe, not the signal day's final turnover", () => {
+  const dataset = makeDataset();
+  const signalDay = 86_400_000;
+  dataset.dailyUniverse = {
+    [signalDay]: [{ symbol: "TESTUSDT", quoteVolume: 9_000_000 }]
+  };
+  const result = runHistoricalBacktest(dataset, {
+    timeframes: ["15m"], initialCapital: 10_000, maxOpenTrades: 5, tradeConfig
+  });
+  assert.equal(result.scanStats.signalsFound, 0);
+  assert.equal(result.report.totalTrades, 0);
+});
+
+test("only scans symbols in each historical day's applicable prior-day top-100 universe", () => {
   const dataset = makeDataset();
   dataset.dailyUniverse = {};
   const result = runHistoricalBacktest(dataset, {

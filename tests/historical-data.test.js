@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { buildDailyUniverse, normalizeKline } from "../js/historical-data.js";
+import { buildDailyUniverse, normalizeKline, fetchBacktestDataset, EMA_WARMUP_BARS } from "../js/historical-data.js";
 
 test("normalizes Binance kline fields including quote turnover", () => {
   const candle = normalizeKline([0,"100","110","90","105","12",86399999,"1234"]);
@@ -31,4 +31,34 @@ test("excludes daily moves strictly beyond plus or minus 30 percent", () => {
   };
   const result = buildDailyUniverse(input, { startTime: day, endTime: day + 86_400_000 });
   assert.deepEqual(result[day].map(x => x.symbol), ["EDGEUSDT"]);
+});
+
+test("downloads enough pre-period candles to warm up EMA100", async () => {
+  const startTime = 1_800_000_000_000;
+  const endTime = startTime + 86_400_000;
+  const requests = [];
+  const fetchImpl = async input => {
+    const url = new URL(input);
+    requests.push(url);
+    let data = [];
+    if (url.pathname.endsWith("/exchangeInfo")) {
+      data = { symbols: [{
+        symbol: "TESTUSDT", status: "TRADING", contractType: "PERPETUAL",
+        quoteAsset: "USDT", contractStatus: "TRADING"
+      }] };
+    } else if (url.pathname.endsWith("/klines") && url.searchParams.get("interval") === "1d") {
+      data = [[startTime,"100","110","90","105","10",endTime-1,"1000"]];
+    }
+    return { ok: true, json: async () => data };
+  };
+  await fetchBacktestDataset({
+    startTime, endTime, timeframes: ["15m"], fetchImpl, concurrency: 1
+  });
+  const intraday = requests.find(url =>
+    url.pathname.endsWith("/klines") && url.searchParams.get("interval") === "15m"
+  );
+  assert.ok(intraday);
+  assert.equal(Number(intraday.searchParams.get("startTime")),
+    startTime - EMA_WARMUP_BARS * 900_000);
+  assert.equal(EMA_WARMUP_BARS, 500);
 });

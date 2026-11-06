@@ -133,3 +133,27 @@ test("builds the daily trading universe with one prior completed UTC day", async
   assert.deepEqual(result.dailyUniverse[dailyStart].map(row => row.symbol), ["TESTUSDT"]);
   assert.deepEqual(result.dailyUniverse[startTime].map(row => row.symbol), ["TESTUSDT"]);
 });
+
+test("funding history preserves conflicting same-time records for downstream ambiguity checks", async () => {
+  const rows = [
+    { fundingTime: 500, fundingRate: "0.0001", markPrice: "100" },
+    { fundingTime: 500, fundingRate: "0.0001", markPrice: "101" },
+    { fundingTime: 600, fundingRate: "0.0002", markPrice: "100" },
+    { fundingTime: 600, fundingRate: "0.0002", markPrice: "100" }
+  ];
+  let cachedKey = "";
+  let cachedValue;
+  const cache = {
+    async get(key) { cachedKey = key; return null; },
+    async put(key, value) { cachedKey = key; cachedValue = value; }
+  };
+  const events = await fetchFundingHistory({
+    symbol: "TESTUSDT", startTime: 100, endTime: 1000, cache,
+    fetchImpl: async () => ({ ok: true, json: async () => rows })
+  });
+  assert.match(cachedKey, /^funding-v2\\|/);
+  assert.equal(events.length, 3);
+  assert.deepEqual(events.filter(event => event.fundingTime === 500).map(event => event.markPrice), [100, 101]);
+  assert.equal(events.filter(event => event.fundingTime === 600).length, 1);
+  assert.equal(cachedValue.length, 3);
+});

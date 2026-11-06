@@ -13,7 +13,9 @@
  */
 
 const API = "https://fapi.binance.com";
-import { EMA_WARMUP_BARS } from "./ema-engine.js";\n\nconst DAY = 86_400_000;
+import { EMA_WARMUP_BARS } from "./ema-engine.js";
+
+const DAY = 86_400_000;
 const MAX_KLINES = 1500;
 export { EMA_WARMUP_BARS };
 

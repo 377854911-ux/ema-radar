@@ -186,6 +186,7 @@ export async function runHistoricalBacktest(dataset, config = {}, options = {}) 
   const totalSeriesCount = seriesEntries.filter(([key]) =>
     selectedTimeframes.includes(key.slice(key.lastIndexOf("|") + 1))
   ).length;
+  scanStats.totalSeriesCount = totalSeriesCount;
 
   for (const timeframe of selectedTimeframes) {
     const settings = timeframeConfig(config, timeframe);

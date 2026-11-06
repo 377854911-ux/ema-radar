@@ -31,6 +31,10 @@ function validateCandles(candles) {
       throw new RangeError(`candles[${i}] has invalid OHLC values`);
     }
     const t = num(c.openTime, `candles[${i}].openTime`);
+    if (c.closeTime !== null && c.closeTime !== undefined) {
+      const closeTime = num(c.closeTime, `candles[${i}].closeTime`);
+      if (closeTime < t) throw new RangeError(`candles[${i}].closeTime cannot be before openTime`);
+    }
     if (t <= previous) throw new RangeError("candles must be strictly chronological");
     previous = t;
   }

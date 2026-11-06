@@ -200,4 +200,6 @@ test("reports progress for a series with insufficient candle history", async () 
   assert.equal(result.scanStats.symbolTimeframeSeries, 1);
   assert.equal(progress.filter(update => update.phase === "series-scan").length, 1);
   assert.equal(progress[0].symbolTimeframeSeries, 1);
+  assert.equal(progress[0].totalSeriesCount, 1);
+  assert.equal(result.scanStats.totalSeriesCount, 1);
 });

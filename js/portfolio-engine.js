@@ -66,6 +66,13 @@ export function simulatePortfolio(candidates, options = {}) {
       config: candidate.config,
       fundingEvents: candidate.fundingEvents ?? []
     });
+    if (trade.status === "open" && candidate.seriesCompleteThroughEnd === false) {
+      trade.status = "incomplete";
+      trade.reason = "incomplete_candle_history_after_entry";
+      trade.fundingComplete = false;
+      trade.fundingPnl = null;
+      trade.netPnl = null;
+    }
     if (trade.status === "unfilled" || trade.status === "unclassifiable") {
       skipped.push({ candidate, reason: trade.reason, trade });
     } else {

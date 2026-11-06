@@ -195,6 +195,13 @@ export async function runHistoricalBacktest(dataset, config = {}, options = {}) 
       scanStats.symbolTimeframeSeries++;
       if (!Array.isArray(candles) || candles.length < 102) {
         scanStats.missingSeries.push({ symbol, timeframe, reason: "insufficient_candles" });
+        options.onProgress?.({
+          phase: "series-scan",
+          timeframe,
+          ...scanStats,
+          totalSeries: seriesEntries.filter(([seriesKey]) => seriesKey.endsWith("|" + timeframe)).length
+        });
+        await new Promise(resolve => setTimeout(resolve, 0));
         continue;
       }
       const { maxBodyPercent: _maxBodyPercent, ...tradeOverrides } = settings;
@@ -226,6 +233,18 @@ export async function runHistoricalBacktest(dataset, config = {}, options = {}) 
       await new Promise(resolve => setTimeout(resolve, 0));
     }
     scanStats.signalsFound += timeframeSignals;
+    // Counts are provisional until all selected timeframes have been scanned.
+    const partialPortfolio = simulatePortfolio(candidates, { initialCapital, maxOpenTrades });
+    options.onProgress?.({
+      phase: "portfolio-progress",
+      timeframe,
+      completedTimeframes: selectedTimeframes.indexOf(timeframe) + 1,
+      totalTimeframes: selectedTimeframes.length,
+      closedTrades: partialPortfolio.accepted.filter(item => item.status === "closed").length,
+      openTrades: partialPortfolio.accepted.filter(item => item.status === "open").length,
+      acceptedTrades: partialPortfolio.accepted.length,
+      ...scanStats
+    });
     options.onProgress?.({
       phase: "signal-scan",
       timeframe,

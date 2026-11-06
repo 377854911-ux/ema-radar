@@ -256,6 +256,25 @@ export async function runHistoricalBacktest(dataset, config = {}, options = {}) 
         await new Promise(resolve => setTimeout(resolve, 0));
         continue;
       }
+      const intervalMs = TIMEFRAME_MINUTES[timeframe] * 60_000;
+      const expectedLastOpenTime = dataset.endTime - intervalMs;
+      const lastCandle = readCandle(candles[candles.length - 1]);
+      if (lastCandle.openTime !== expectedLastOpenTime) {
+        scanStats.missingSeries.push({
+          symbol, timeframe, reason: "trailing_candles_missing",
+          lastCandleOpenTime: lastCandle.openTime,
+          expectedLastOpenTime
+        });
+        options.onProgress?.({
+          phase: "series-scan",
+          timeframe,
+          ...scanStats,
+          totalSeries: seriesEntries.filter(([seriesKey]) => seriesKey.endsWith("|" + timeframe)).length,
+          totalSeriesCount
+        });
+        await new Promise(resolve => setTimeout(resolve, 0));
+        continue;
+      }
       const { maxBodyPercent: _maxBodyPercent, ...tradeOverrides } = settings;
       const tradeConfig = { ...config.tradeConfig, ...tradeOverrides };
       const split = splitContiguousCandles(candles, timeframe);

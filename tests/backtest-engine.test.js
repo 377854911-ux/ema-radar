@@ -294,3 +294,41 @@ test("short take-profit gap at candle open fills at the better open before a lat
   assert.equal(result.exitPrice, 96);
   assert.equal(result.grossPnl, 20);
 });
+
+
+test("duplicate identical funding records are charged once", () => {
+  const data = [
+    { openTime: 0, closeTime: 9, open: 98, high: 101, low: 97, close: 100 },
+    { openTime: 10, closeTime: 19, open: 100, high: 101, low: 99, close: 100 },
+    { openTime: 20, closeTime: 29, open: 100, high: 103, low: 99, close: 102 }
+  ];
+  const event = { fundingTime: 15, rate: 0.001, markPrice: 100 };
+  const result = simulateTrade({
+    candles: data, signalIndex: 0, direction: "LONG",
+    config: { ...base, rr: 1 },
+    fundingEvents: [event, { ...event }]
+  });
+  assert.equal(result.status, "closed");
+  assert.equal(result.fundingEvents.length, 1);
+  assert.equal(result.fundingPnl, -0.5);
+  assert.equal(result.netPnl, 9.5);
+});
+
+test("conflicting duplicate funding records make settlement incomplete", () => {
+  const data = [
+    { openTime: 0, closeTime: 9, open: 98, high: 101, low: 97, close: 100 },
+    { openTime: 10, closeTime: 19, open: 100, high: 101, low: 99, close: 100 },
+    { openTime: 20, closeTime: 29, open: 100, high: 103, low: 99, close: 102 }
+  ];
+  const result = simulateTrade({
+    candles: data, signalIndex: 0, direction: "LONG",
+    config: { ...base, rr: 1 },
+    fundingEvents: [
+      { fundingTime: 15, rate: 0.001, markPrice: 100 },
+      { fundingTime: 15, rate: 0.001, markPrice: 101 }
+    ]
+  });
+  assert.equal(result.status, "incomplete");
+  assert.equal(result.netPnl, null);
+  assert.equal(result.reason, "missing_or_ambiguous_funding_data");
+});

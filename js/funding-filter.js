@@ -24,8 +24,10 @@ export function latestKnownFundingRate(events, knownAt) {
   let latest = null;
   for (const event of events) {
     const time = Number(event?.fundingTime);
-    const rate = Number(event?.rate);
-    if (Number.isFinite(time) && time < knownAt && Number.isFinite(rate)
+    const rawRate = event?.rate;
+    const rate = Number(rawRate);
+    if (rawRate !== null && rawRate !== undefined && rawRate !== ""
+        && Number.isFinite(time) && time < knownAt && Number.isFinite(rate)
         && (!latest || time > latest.fundingTime)) {
       latest = { fundingTime: time, rate };
     }

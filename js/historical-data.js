@@ -309,8 +309,13 @@ export async function fetchBacktestDataset({
     onProgress({ phase: "klines", completed, total, symbol: task.symbol, timeframe: task.timeframe });
     return [`${task.symbol}|${task.timeframe}`, candles];
   });
+  // Include prior settled events so the filter can use only a rate known at
+  // each historical signal timestamp, without looking ahead.
+  const fundingWarmupStart = Math.max(0, startTime - 8 * DAY);
   const fundingResults = await mapLimit(symbols, concurrency, async symbol => {
-    const events = await fetchFundingHistory({ symbol, startTime, endTime, fetchImpl, cache });
+    const events = await fetchFundingHistory({
+      symbol, startTime: fundingWarmupStart, endTime, fetchImpl, cache
+    });
     completed++;
     onProgress({ phase: "funding", completed, total, symbol });
     return [symbol, events];

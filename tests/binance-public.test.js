@@ -1,6 +1,29 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { getFundingRateMap, scanMarket } from "../js/binance-public.js";
+import { getFundingRateMap, getKlines, scanMarket } from "../js/binance-public.js";
+
+test("live market-data requests retry Binance 429 responses", async () => {
+  const originalFetch = globalThis.fetch;
+  let calls = 0;
+  globalThis.fetch = async () => {
+    calls += 1;
+    if (calls === 1) {
+      return {
+        ok: false,
+        status: 429,
+        headers: { get: () => "0" }
+      };
+    }
+    return { ok: true, json: async () => [] };
+  };
+  try {
+    const rows = await getKlines("RETRYUSDT", "15m", 10);
+    assert.deepEqual(rows, []);
+    assert.equal(calls, 2);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
 
 test("live scanner excludes both positive and negative high funding rates before fetching klines", async () => {
   const originalFetch = globalThis.fetch;

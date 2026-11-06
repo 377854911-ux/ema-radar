@@ -78,7 +78,7 @@ function splitContiguousCandles(rawCandles, timeframe) {
  */
 function findSignalsForSeries({
   symbol, timeframe, rawCandles, dataset, settings, tradeConfig, onSignal,
-  fundingFilterPct = 0, onFundingFilter = () => {}
+  fundingFilterPct = 0, onFundingFilter = () => {}, dailyUniverseSets
 }) {
   const candles = rawCandles.map(readCandle);
   const intervalMs = TIMEFRAME_MINUTES[timeframe] * 60_000;
@@ -104,8 +104,7 @@ function findSignalsForSeries({
 
     // A day's eligible universe is known only after the preceding UTC day closes.
     const universeDay = dayStart(timestamp) - DAY_MS;
-    const dailyRows = dataset.dailyUniverse[String(universeDay)] ?? dataset.dailyUniverse[universeDay] ?? [];
-    if (!dailyRows.some(row => row.symbol === symbol)) continue;
+    if (!dailyUniverseSets.get(universeDay)?.has(symbol)) continue;
     if (!validCandle(signalCandle, intervalMs) || !validCandle(nextCandle, intervalMs)) continue;
 
     // Use the exact same signal predicate as the live radar. A valid signal
@@ -212,6 +211,9 @@ export async function runHistoricalBacktest(dataset, config = {}, options = {}) 
       throw new RangeError(`dataset.endTime must align to the selected ${timeframe} candle boundary`);
     }
   }
+  const dailyUniverseSets = new Map(Object.entries(dataset.dailyUniverse).map(([day, rows]) => [
+    Number(day), new Set(rows.map(row => row.symbol))
+  ]));
   const candidates = [];
   const scanStats = {
     symbolTimeframeSeries: 0,
@@ -283,6 +285,7 @@ export async function runHistoricalBacktest(dataset, config = {}, options = {}) 
           symbol, timeframe, rawCandles: segment, dataset, settings, tradeConfig,
           onSignal: options.onSignal,
           fundingFilterPct,
+          dailyUniverseSets,
           onFundingFilter: reason => {
             if (reason === "filtered") scanStats.fundingFilteredSignals++;
             else if (reason === "unavailable") scanStats.fundingRateUnavailableSignals++;
@@ -308,19 +311,8 @@ export async function runHistoricalBacktest(dataset, config = {}, options = {}) 
       await new Promise(resolve => setTimeout(resolve, 0));
     }
     scanStats.signalsFound += timeframeSignals;
-    // Counts are provisional until all selected timeframes have been scanned.
-    const partialPortfolio = simulatePortfolio(candidates, { initialCapital, maxOpenTrades });
-    options.onProgress?.({
-      phase: "portfolio-progress",
-      timeframe,
-      completedTimeframes: selectedTimeframes.indexOf(timeframe) + 1,
-      totalTimeframes: selectedTimeframes.length,
-      closedTrades: partialPortfolio.accepted.filter(item => item.status === "closed").length,
-      openTrades: partialPortfolio.accepted.filter(item => item.status === "open").length,
-      acceptedTrades: partialPortfolio.accepted.length,
-      totalSeriesCount,
-      ...scanStats
-    });
+    // Avoid re-running the full portfolio simulation after every timeframe.
+    // Final trade accounting is performed once after all signals are collected.
     options.onProgress?.({
       phase: "signal-scan",
       timeframe,

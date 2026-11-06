@@ -241,6 +241,7 @@ export function runHistoricalBacktest(dataset, config = {}, options = {}) {
     scanStats,
     ...portfolio,
     report: {
+      openTrades: portfolio.accepted.filter(trade => trade.status === "open").length,
       totalReturnPct: portfolio.summary.totalReturnPct,
       netProfit: portfolio.summary.netProfit,
       winRatePct: portfolio.summary.winRatePct,

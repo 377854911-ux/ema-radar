@@ -82,42 +82,63 @@ export function buildDailyUniverse(dailyCandlesBySymbol, { startTime, endTime, l
 export function createHistoricalCache(indexedDBImpl = globalThis.indexedDB) {
   const DB_NAME = "ema-radar-historical-v1";
   const STORE = "candles";
+  const memory = new Map();
   let dbPromise;
   async function db() {
     if (!indexedDBImpl) return null;
-    if (!dbPromise) dbPromise = new Promise((resolve, reject) => {
-      const open = indexedDBImpl.open(DB_NAME, 1);
-      open.onupgradeneeded = () => {
-        const database = open.result;
-        if (!database.objectStoreNames.contains(STORE)) {
-          const store = database.createObjectStore(STORE, { keyPath: "key" });
-          store.createIndex("symbolInterval", "symbolInterval", { unique: false });
-        }
-      };
-      open.onsuccess = () => resolve(open.result);
-      open.onerror = () => reject(open.error);
+    if (!dbPromise) dbPromise = new Promise(resolve => {
+      try {
+        const open = indexedDBImpl.open(DB_NAME, 1);
+        open.onupgradeneeded = () => {
+          const database = open.result;
+          if (!database.objectStoreNames.contains(STORE)) {
+            const store = database.createObjectStore(STORE, { keyPath: "key" });
+            store.createIndex("symbolInterval", "symbolInterval", { unique: false });
+          }
+        };
+        open.onsuccess = () => resolve(open.result);
+        open.onerror = () => resolve(null);
+        open.onblocked = () => resolve(null);
+      } catch {
+        resolve(null);
+      }
     });
     return dbPromise;
   }
   return {
     async get(key) {
-      const database = await db();
-      if (!database) return null;
-      return new Promise((resolve, reject) => {
-        const request = database.transaction(STORE, "readonly").objectStore(STORE).get(key);
-        request.onsuccess = () => resolve(request.result?.value ?? null);
-        request.onerror = () => reject(request.error);
-      });
+      if (memory.has(key)) return memory.get(key);
+      try {
+        const database = await db();
+        if (!database) return null;
+        return await new Promise((resolve, reject) => {
+          const request = database.transaction(STORE, "readonly").objectStore(STORE).get(key);
+          request.onsuccess = () => resolve(request.result?.value ?? null);
+          request.onerror = () => reject(request.error);
+          request.onblocked = () => reject(new Error("IndexedDB read blocked"));
+        });
+      } catch {
+        return memory.get(key) ?? null;
+      }
     },
     async put(key, value, symbolInterval = "") {
-      const database = await db();
-      if (!database) return false;
-      return new Promise((resolve, reject) => {
-        const request = database.transaction(STORE, "readwrite").objectStore(STORE)
-          .put({ key, value, symbolInterval, savedAt: Date.now() });
-        request.onsuccess = () => resolve(true);
-        request.onerror = () => reject(request.error);
-      });
+      memory.set(key, value);
+      try {
+        const database = await db();
+        if (!database) return false;
+        await new Promise((resolve, reject) => {
+          const request = database.transaction(STORE, "readwrite").objectStore(STORE)
+            .put({ key, value, symbolInterval, savedAt: Date.now() });
+          request.onsuccess = () => resolve(true);
+          request.onerror = () => reject(request.error);
+          request.onblocked = () => reject(new Error("IndexedDB write blocked"));
+        });
+        return true;
+      } catch {
+        // Keep the downloaded data usable for this page session when persistent
+        // storage is disabled, blocked, or out of quota.
+        return false;
+      }
     }
   };
 }

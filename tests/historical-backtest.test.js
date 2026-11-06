@@ -28,30 +28,34 @@ function makeDataset() {
       close
     });
   }
-  // One newly closed bullish candle containing all three EMA values.
-  candles[105] = {
-    openTime: 105 * 900_000,
-    closeTime: 106 * 900_000 - 1,
-    open: 95,
-    high: 112,
-    low: 94,
-    close: 110
+  // Build a fresh signal after 500 complete warm-up bars.
+  const signalIndex = 505;
+  const closes = candles.map(candle => candle.close);
+  const emas = [25, 50, 100].map(period => calculateEMA(closes, period)[signalIndex]);
+  const signalOpen = Math.min(...emas) - 1;
+  const signalClose = Math.max(...emas) + 1;
+  candles[signalIndex] = {
+    openTime: signalIndex * 900_000,
+    closeTime: (signalIndex + 1) * 900_000 - 1,
+    open: signalOpen,
+    high: signalClose + 1,
+    low: signalOpen - 1,
+    close: signalClose
   };
-  // The next candle reaches the 1R target after next-open entry.
-  candles[106] = {
-    openTime: 106 * 900_000,
-    closeTime: 107 * 900_000 - 1,
-    open: 110,
-    high: 130,
-    low: 109,
-    close: 128
+  candles[signalIndex + 1] = {
+    openTime: (signalIndex + 1) * 900_000,
+    closeTime: (signalIndex + 2) * 900_000 - 1,
+    open: signalClose,
+    high: signalClose * 1.1,
+    low: signalClose - 0.1,
+    close: signalClose * 1.05
   };
   return {
     startTime: 0,
     endTime: 10 * 86_400_000,
     timeframes: ["15m"],
     dailyUniverse: {
-      [0]: [{ symbol: "TESTUSDT", quoteVolume: 1_000_000 }]
+      [4 * 86_400_000]: [{ symbol: "TESTUSDT", quoteVolume: 1_000_000 }]
     },
     candlesBySymbolTimeframe: { "TESTUSDT|15m": candles },
     fundingBySymbol: { TESTUSDT: [] },
@@ -231,7 +235,7 @@ test("historical funding filter does not use a rate settled after the signal", a
   const dataset = makeDataset();
   dataset.fundingBySymbol.TESTUSDT = [
     { fundingTime: 90_000_000, rate: 0.00005, markPrice: 100 },
-    { fundingTime: 100_000_000, rate: 0.0005, markPrice: 100 }
+    { fundingTime: 500_000_000, rate: 0.0005, markPrice: 100 }
   ];
   const result = await runHistoricalBacktest(dataset, {
     timeframes: ["15m"], initialCapital: 10_000, maxOpenTrades: 5,

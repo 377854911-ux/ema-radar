@@ -252,7 +252,7 @@ test("simultaneous losing exits count as one order-independent settlement batch"
     assert.equal(result.accepted.length, 2);
     assert.deepEqual(result.accepted.map(trade => trade.exitTime), [19, 19]);
     assert.equal(result.capital.consecutiveLosses, 1);
-    const replenishments = result.capital.events.filter(event => event.type === "loss_replenishment_batch");
+    const replenishments = result.capital.events.filter(event => event.type === "loss_replenishment" && event.batch === true);
     assert.equal(replenishments.length, 1);
     assert.equal(replenishments[0].batchNetPnl, -20);
     assert.equal(replenishments[0].lossStreak, 1);
@@ -266,7 +266,11 @@ test("simultaneous losing exits count as one order-independent settlement batch"
 });
 
 test("simultaneous mixed exits use their combined net result for the loss streak", () => {
-  const winner = longCandles();
+  const winner = [
+    { openTime: 0, closeTime: 9, open: 98, high: 101, low: 97, close: 100 },
+    { openTime: 10, closeTime: 19, open: 100, high: 103, low: 99, close: 102 },
+    { openTime: 20, closeTime: 29, open: 102, high: 103, low: 101, close: 102 }
+  ];
   const loser = [
     { openTime: 0, closeTime: 9, open: 98, high: 101, low: 97, close: 100 },
     { openTime: 10, closeTime: 19, open: 100, high: 101, low: 97, close: 99 },
@@ -279,6 +283,6 @@ test("simultaneous mixed exits use their combined net result for the loss streak
   assert.equal(result.accepted.length, 2);
   assert.equal(result.accepted[0].exitTime, result.accepted[1].exitTime);
   assert.equal(result.capital.consecutiveLosses, 0);
-  assert.equal(result.capital.events.some(event => event.type === "loss_replenishment_batch"), false);
+  assert.equal(result.capital.events.some(event => event.type === "loss_replenishment" && event.batch === true), false);
   assert.equal(result.capital.accountBalance, 10_000);
 });

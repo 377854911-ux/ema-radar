@@ -111,6 +111,62 @@ test("market-style exit slippage is adverse and fees are itemized", () => {
   assert.ok(result.exitFee > 0);
 });
 
+test("long and short exit at the first active stop touched", () => {
+  const longCandles = [
+    { openTime: 0, closeTime: 9, open: 100, high: 111, low: 99, close: 110 },
+    { openTime: 10, closeTime: 19, open: 110, high: 111, low: 109, close: 110 },
+    { openTime: 20, closeTime: 29, open: 110, high: 111, low: 97, close: 105 }
+  ];
+  const long = simulateTrade({
+    candles: longCandles, signalIndex: 0, direction: "LONG",
+    config: { ...base, hardStopPct: 2, auxiliaryStop: "signal_open" }
+  });
+  assert.equal(long.hardStop, 107.8);
+  assert.equal(long.auxiliaryStop, 100);
+  assert.equal(long.exitReason, "stop_loss");
+  assert.equal(long.exitPrice, 107.8);
+
+  const shortCandles = [
+    { openTime: 0, closeTime: 9, open: 110, high: 111, low: 99, close: 100 },
+    { openTime: 10, closeTime: 19, open: 100, high: 101, low: 99, close: 100 },
+    { openTime: 20, closeTime: 29, open: 100, high: 113, low: 99, close: 105 }
+  ];
+  const short = simulateTrade({
+    candles: shortCandles, signalIndex: 0, direction: "SHORT",
+    config: { ...base, hardStopPct: 2, auxiliaryStop: "signal_open" }
+  });
+  assert.equal(short.hardStop, 102);
+  assert.equal(short.auxiliaryStop, 110);
+  assert.equal(short.exitReason, "stop_loss");
+  assert.equal(short.exitPrice, 102);
+});
+
+test("a stop gap fills at the opening price after the first stop is crossed", () => {
+  const longCandles = [
+    { openTime: 0, closeTime: 9, open: 100, high: 111, low: 99, close: 110 },
+    { openTime: 10, closeTime: 19, open: 110, high: 111, low: 109, close: 110 },
+    { openTime: 20, closeTime: 29, open: 106, high: 107, low: 99, close: 100 }
+  ];
+  const long = simulateTrade({
+    candles: longCandles, signalIndex: 0, direction: "LONG",
+    config: { ...base, hardStopPct: 2, auxiliaryStop: "signal_open" }
+  });
+  assert.equal(long.exitReason, "stop_loss");
+  assert.equal(long.exitPrice, 106);
+
+  const shortCandles = [
+    { openTime: 0, closeTime: 9, open: 110, high: 111, low: 99, close: 100 },
+    { openTime: 10, closeTime: 19, open: 100, high: 101, low: 99, close: 100 },
+    { openTime: 20, closeTime: 29, open: 104, high: 111, low: 103, close: 110 }
+  ];
+  const short = simulateTrade({
+    candles: shortCandles, signalIndex: 0, direction: "SHORT",
+    config: { ...base, hardStopPct: 2, auxiliaryStop: "signal_open" }
+  });
+  assert.equal(short.exitReason, "stop_loss");
+  assert.equal(short.exitPrice, 104);
+});
+
 test("timeout counts complete candles after entry", () => {
   const timeoutCandles = candles
     .map((c, i) => i === 1 ? { ...c, high: 105, close: 104 } : c)

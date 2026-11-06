@@ -299,7 +299,12 @@ export async function runHistoricalBacktest(dataset, config = {}, options = {}) 
             else if (reason === "unavailable") scanStats.fundingRateUnavailableSignals++;
           }
         });
-        candidates.push(...found);
+        const segmentCompleteThroughEnd =
+          segment[segment.length - 1].openTime === expectedLastOpenTime;
+        candidates.push(...found.map(candidate => ({
+          ...candidate,
+          seriesCompleteThroughEnd: segmentCompleteThroughEnd
+        })));
         timeframeSignals += found.length;
         scanStats.candlesEvaluated += Math.max(0, segment.length - EMA_WARMUP_BARS - 1);
       }

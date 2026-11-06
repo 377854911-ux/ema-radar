@@ -76,6 +76,11 @@ export function simulatePortfolio(candidates, options = {}) {
   prepared.sort((a, b) =>
     a.trade.entryTime - b.trade.entryTime
     || Number(a.candidate.distanceRate ?? Infinity) - Number(b.candidate.distanceRate ?? Infinity)
+    // Stable tie-breaks prevent selected timeframe/object order from changing
+    // which simultaneous opportunity gets scarce portfolio capacity.
+    || a.candidate.symbol.localeCompare(b.candidate.symbol)
+    || a.candidate._timeframeMs - b.candidate._timeframeMs
+    || String(a.candidate.direction).localeCompare(String(b.candidate.direction))
     || a.candidate._index - b.candidate._index
   );
 

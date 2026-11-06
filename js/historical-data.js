@@ -44,7 +44,7 @@ async function waitForRequestSlot() {
 function noteRateLimit(error) {
   const retryMs = Number.isFinite(error?.retryAfterMs)
     ? error.retryAfterMs
-    : RATE_LIMIT_COOLDOWN_MS;
+    : (error?.status === 418 ? 120_000 : RATE_LIMIT_COOLDOWN_MS);
   rateLimitUntil = Math.max(rateLimitUntil, Date.now() + retryMs);
 }
 

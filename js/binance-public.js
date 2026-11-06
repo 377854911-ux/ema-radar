@@ -159,13 +159,11 @@ async function getLatestLiveSignal(symbol, timeframe, maxBodyPercent) {
         lastClosedCandle,
         emaValues: analysis.emaValues
       });
-    } else {
-      liveEmaCache.delete(key);
+      return analysis.signal;
     }
-  } else {
-    liveEmaCache.delete(key);
   }
-  return analysis.signal;
+  liveEmaCache.delete(key);
+  return null;
 }
 
 async function mapWithConcurrency(items, concurrency, worker) {

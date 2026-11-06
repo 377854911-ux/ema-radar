@@ -79,6 +79,9 @@ export function simulatePortfolio(candidates, options = {}) {
   let lossStreak = 0;
   let capitalAccountingComplete = true;
   const capitalEvents = [];
+  // Cash-balance snapshots follow actual cash-flow timing. Unrealized PnL is
+  // excluded, while entry fees are reflected as soon as the position opens.
+  const equitySnapshots = [{ time: -Infinity, balance: initialCapital, type: "initial" }];
 
   function settleUntil(timestamp) {
     const due = accepted
@@ -102,6 +105,11 @@ export function simulatePortfolio(candidates, options = {}) {
       // Entry fee was deducted when the position opened. Settle gross PnL,
       // exit fee and known funding now; the combined lifetime change equals netPnl.
       accountBalance += item.trade.grossPnl - item.trade.exitFee + item.trade.fundingPnl;
+      equitySnapshots.push({
+        time: item.trade.exitTime,
+        balance: accountBalance,
+        type: "trade_settlement"
+      });
       if (item.trade.exitReason === "ambiguous_both_touched") {
         // A same-candle TP/SL collision is neutral for win/loss streaks.
         capitalEvents.push({
@@ -123,6 +131,11 @@ export function simulatePortfolio(candidates, options = {}) {
         const topUp = Math.max(0, netAdjustment);
         const normalizationWithdrawal = Math.max(0, -netAdjustment);
         accountBalance = targetBalance;
+        equitySnapshots.push({
+          time: item.trade.exitTime,
+          balance: accountBalance,
+          type: "capital_replenishment"
+        });
         actualCashInjected += topUp;
         // The user's replenishment schedule is tracked at its stated nominal
         // restore-plus-bonus amount; actual net deposits are shown separately.
@@ -194,6 +207,11 @@ export function simulatePortfolio(candidates, options = {}) {
     }
 
     accountBalance -= entryFee;
+    equitySnapshots.push({
+      time: trade.entryTime,
+      balance: accountBalance,
+      type: "entry_fee"
+    });
     usedCapital += trade.notional;
     accepted.push(item);
   }
@@ -211,6 +229,20 @@ export function simulatePortfolio(candidates, options = {}) {
     .filter(trade => trade.exitTime != null)
     .sort((a, b) => a.exitTime - b.exitTime);
   const summary = summarizeBacktest(realizedInExitOrder, initialCapital);
+  if (capitalAccountingComplete) {
+    let peak = initialCapital;
+    let maxDrawdown = 0;
+    for (const event of equitySnapshots) {
+      peak = Math.max(peak, event.balance);
+      if (peak > 0) {
+        maxDrawdown = Math.max(maxDrawdown, (peak - event.balance) / peak * 100);
+      }
+    }
+    summary.maxDrawdownPct = maxDrawdown;
+  } else {
+    // Incomplete funding makes the final cash path unknowable.
+    summary.maxDrawdownPct = null;
+  }
   summary.totalCapitalReplenished = cumulativeTopUps;
   summary.capitalAccountingComplete = capitalAccountingComplete;
 

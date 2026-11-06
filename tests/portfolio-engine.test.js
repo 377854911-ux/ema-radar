@@ -50,6 +50,40 @@ test("five open positions maximum; simultaneous candidates rank by EMA distance"
   assert.equal(result.accepted[0].symbol, "COIN5USDT");
 });
 
+test("capital and position slot are released before an entry at the same timestamp", () => {
+  const firstCandles = [
+    { openTime: 0, closeTime: 9, open: 98, high: 101, low: 97, close: 100 },
+    { openTime: 10, closeTime: 19, open: 100, high: 103, low: 99, close: 102 },
+    { openTime: 20, closeTime: 29, open: 102, high: 103, low: 101, close: 102 }
+  ];
+  const secondCandles = [
+    { openTime: 0, closeTime: 9, open: 98, high: 101, low: 97, close: 100 },
+    { openTime: 10, closeTime: 19, open: 99, high: 101, low: 98, close: 100 },
+    { openTime: 20, closeTime: 29, open: 100, high: 103, low: 99, close: 102 },
+    { openTime: 30, closeTime: 39, open: 102, high: 103, low: 101, close: 102 }
+  ];
+  const signalCloseConfig = { ...config, entryMethod: "signal_close", positionNotional: 700 };
+  const result = simulatePortfolio([
+    {
+      symbol: "FIRSTUSDT", timeframe: "1h", direction: "LONG",
+      distanceRate: 0.1, candles: firstCandles, signalIndex: 0,
+      config: signalCloseConfig
+    },
+    {
+      symbol: "SECONDUSDT", timeframe: "1h", direction: "LONG",
+      distanceRate: 0.1, candles: secondCandles, signalIndex: 1,
+      config: signalCloseConfig
+    }
+  ], { initialCapital: 1_000, maxOpenTrades: 1 });
+
+  assert.equal(result.accepted.length, 2);
+  assert.equal(result.accepted[0].exitTime, 19);
+  assert.equal(result.accepted[1].entryTime, 19);
+  assert.equal(result.skipped.some(item => item.reason === "max_open_trades_reached"), false);
+  assert.equal(result.capital.usedCapital, 0);
+  assert.equal(result.capital.accountBalance, 1_028);
+});
+
 test("an opposite signal is discarded while an existing position is open", () => {
   const first = [
     { openTime: 0, closeTime: 9, open: 98, high: 101, low: 97, close: 100 },

@@ -71,6 +71,30 @@ test("retracement limit uses the configured body percentage and cancels if unfil
   assert.equal(noFill.status, "unfilled");
 });
 
+test("retracement limit gets better opening price for long and short fills", () => {
+  const longData = [
+    { openTime: 0, closeTime: 9, open: 100, high: 111, low: 99, close: 110 },
+    { openTime: 10, closeTime: 19, open: 106, high: 109, low: 105, close: 108 },
+    { openTime: 20, closeTime: 29, open: 108, high: 109, low: 107, close: 108 }
+  ];
+  const long = simulateTrade({
+    candles: longData, signalIndex: 0, direction: "LONG",
+    config: { ...base, entryMethod: "retracement_limit", retracementPct: 20, limitValidityBars: 1 }
+  });
+  assert.equal(long.entryPrice, 106);
+
+  const shortData = [
+    { openTime: 0, closeTime: 9, open: 110, high: 111, low: 99, close: 100 },
+    { openTime: 10, closeTime: 19, open: 104, high: 105, low: 101, close: 103 },
+    { openTime: 20, closeTime: 29, open: 103, high: 104, low: 102, close: 103 }
+  ];
+  const short = simulateTrade({
+    candles: shortData, signalIndex: 0, direction: "SHORT",
+    config: { ...base, entryMethod: "retracement_limit", retracementPct: 20, limitValidityBars: 1 }
+  });
+  assert.equal(short.entryPrice, 104);
+});
+
 test("market-style exit slippage is adverse and fees are itemized", () => {
   const data = [
     { openTime: 0, closeTime: 9, open: 98, high: 101, low: 97, close: 100 },

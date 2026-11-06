@@ -244,9 +244,12 @@ export function summarizeBacktest(trades, initialCapital = 10_000) {
   const decisive = complete.filter(t => t.exitReason !== "ambiguous_both_touched");
   const wins = decisive.filter(t => t.netPnl > 0).length;
   const losses = decisive.filter(t => t.netPnl < 0).length;
-  // Net profit includes fees/funding from every completed trade, including
-  // ambiguous same-candle exits whose gross PnL is deliberately zero.
-  const netProfit = complete.reduce((sum, t) => sum + t.netPnl, 0);
+  // Split realized net PnL after fees and funding. Include ambiguous exits:
+  // their gross PnL is zero, but their fees can still create a real loss.
+  const totalProfit = complete.filter(t => t.netPnl > 0).reduce((sum, t) => sum + t.netPnl, 0);
+  const totalLoss = Math.abs(complete.filter(t => t.netPnl < 0).reduce((sum, t) => sum + t.netPnl, 0));
+  const netProfit = totalProfit - totalLoss;
+  // The risk/reward ratio remains based only on decisive wins/losses.
   const grossWins = decisive.filter(t => t.netPnl > 0).reduce((sum, t) => sum + t.netPnl, 0);
   const grossLosses = Math.abs(decisive.filter(t => t.netPnl < 0).reduce((sum, t) => sum + t.netPnl, 0));
   let equity = initialCapital;
@@ -259,6 +262,8 @@ export function summarizeBacktest(trades, initialCapital = 10_000) {
   }
   return {
     totalReturnPct: netProfit / initialCapital * 100,
+    totalProfit,
+    totalLoss,
     netProfit,
     winRatePct: wins + losses ? wins / (wins + losses) * 100 : 0,
     riskRewardRatio: grossLosses > 0 ? grossWins / grossLosses : null,

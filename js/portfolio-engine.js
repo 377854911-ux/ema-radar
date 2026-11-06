@@ -171,7 +171,8 @@ export function simulatePortfolio(candidates, options = {}) {
           time: exitTime,
           symbols: batch.filter(item => item.trade.status === "closed" && Number.isFinite(item.trade.netPnl))
             .map(item => item.candidate.symbol),
-          type: "loss_replenishment_batch",
+          type: "loss_replenishment",
+          batch: true,
           batchNetPnl,
           lossStreak,
           restoreAdjustment,
@@ -187,7 +188,8 @@ export function simulatePortfolio(candidates, options = {}) {
           time: exitTime,
           symbols: batch.filter(item => item.trade.status === "closed" && Number.isFinite(item.trade.netPnl))
             .map(item => item.candidate.symbol),
-          type: "trade_settlement_batch",
+          type: "trade_closed",
+          batch: true,
           batchNetPnl,
           ambiguousTradesExcluded: batchHasAmbiguous,
           lossStreak

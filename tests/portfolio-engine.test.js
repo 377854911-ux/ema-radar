@@ -70,3 +70,36 @@ test("an opposite signal is discarded while an existing position is open", () =>
   assert.equal(result.accepted.length, 1);
   assert.equal(result.skipped.some(x => x.reason === "opposite_position_open_at_signal"), true);
 });
+
+
+test("consecutive-loss replenishment resets to base plus the scheduled bonus", () => {
+  function losingCandles(start) {
+    return [
+      { openTime: start, closeTime: start + 9, open: 98, high: 101, low: 97, close: 100 },
+      { openTime: start + 10, closeTime: start + 19, open: 100, high: 101, low: 97, close: 99 },
+      { openTime: start + 20, closeTime: start + 29, open: 99, high: 100, low: 98, close: 99 }
+    ];
+  }
+  const result = simulatePortfolio([
+    { symbol: "LOSS1USDT", timeframe: "1h", direction: "LONG", distanceRate: 0.1, candles: losingCandles(0), signalIndex: 0, config },
+    { symbol: "LOSS2USDT", timeframe: "1h", direction: "LONG", distanceRate: 0.1, candles: losingCandles(30), signalIndex: 0, config }
+  ]);
+  assert.equal(result.capital.events.filter(e => e.type === "loss_replenishment").length, 2);
+  assert.equal(result.capital.events[0].targetBalance, 11_000);
+  assert.equal(result.capital.events[1].targetBalance, 12_000);
+  assert.equal(result.capital.cumulativeTopUps, 3_010);
+  assert.equal(result.capital.actualCashInjected, 2_020);
+  assert.equal(result.capital.accountBalance, 12_000);
+});
+
+test("portfolio skips a trade when its fixed notional exceeds available funds", () => {
+  const result = simulatePortfolio([
+    {
+      symbol: "TOOBIGUSDT", timeframe: "1h", direction: "LONG", distanceRate: 0.1,
+      candles: longCandles(), signalIndex: 0,
+      config: { ...config, positionNotional: 10_001 }
+    }
+  ]);
+  assert.equal(result.accepted.length, 0);
+  assert.equal(result.skipped[0].reason, "insufficient_available_balance");
+});

@@ -116,10 +116,10 @@ export async function scanMarket({
     }
   });
 
-  const signals = results.filter(item => item && !item.error);
+  const signals = rankAndDeduplicateSignals(results.filter(item => item && !item.error));
   return {
-    long: rankAndDeduplicateSignals(signals.filter(item => item.direction === "LONG")),
-    short: rankAndDeduplicateSignals(signals.filter(item => item.direction === "SHORT")),
+    long: signals.filter(item => item.direction === "LONG"),
+    short: signals.filter(item => item.direction === "SHORT"),
     scanned: completed,
     total: tasks.length,
     failures

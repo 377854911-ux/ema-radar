@@ -32,15 +32,22 @@ test("next-open entry and take-profit are calculated from actual entry", () => {
   assert.equal(result.netPnl, 10);
 });
 
-test("same-candle stop and target collision resolves conservatively to stop", () => {
+test("same-candle stop and target collision offsets gross PnL to zero but charges fees", () => {
   const data = [
     { openTime: 0, closeTime: 9, open: 98, high: 101, low: 97, close: 100 },
     { openTime: 10, closeTime: 19, open: 100, high: 105, low: 97, close: 101 },
     { openTime: 20, closeTime: 29, open: 101, high: 102, low: 100, close: 101 }
   ];
-  const result = simulateTrade({ candles: data, signalIndex: 0, direction: "LONG", config: base });
-  assert.equal(result.exitReason, "stop_loss");
-  assert.equal(result.exitPrice, 98);
+  const result = simulateTrade({
+    candles: data, signalIndex: 0, direction: "LONG",
+    config: { ...base, entryFeeRate: 0.1, exitFeeRate: 0.1 }
+  });
+  assert.equal(result.exitReason, "ambiguous_both_touched");
+  assert.equal(result.exitPrice, 100);
+  assert.equal(result.grossPnl, 0);
+  assert.equal(result.entryFee, 0.5);
+  assert.equal(result.exitFee, 0.5);
+  assert.equal(result.netPnl, -1);
 });
 
 test("retracement limit uses the configured body percentage and cancels if unfilled", () => {
@@ -132,4 +139,20 @@ test("invalid risk settings are rejected instead of silently normalized", () => 
     candles, signalIndex: 0, direction: "LONG",
     config: { ...base, hardStopPct: 2.5 }
   }), /integer from 1 to 20/);
+});
+
+
+test("ambiguous trades are excluded from win rate denominator but fees remain in net profit", () => {
+  const summary = summarizeBacktest([
+    { status: "closed", netPnl: 20, exitReason: "take_profit" },
+    { status: "closed", netPnl: -10, exitReason: "stop_loss" },
+    { status: "closed", netPnl: -1, exitReason: "ambiguous_both_touched" }
+  ]);
+  assert.equal(summary.totalTrades, 3);
+  assert.equal(summary.resolvedTrades, 2);
+  assert.equal(summary.ambiguousTradeCount, 1);
+  assert.equal(summary.winRatePct, 50);
+  assert.equal(summary.netProfit, 9);
+  assert.equal(summary.takeProfitCount, 1);
+  assert.equal(summary.stopLossCount, 1);
 });

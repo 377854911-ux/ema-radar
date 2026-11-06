@@ -90,6 +90,8 @@ test("consecutive-loss replenishment resets to base plus the scheduled bonus", (
   assert.equal(result.capital.cumulativeTopUps, 3_010);
   assert.equal(result.capital.actualCashInjected, 2_020);
   assert.equal(result.capital.accountBalance, 12_000);
+  // The trough before each replenishment must remain visible in drawdown.
+  assert.ok(Math.abs(result.summary.maxDrawdownPct - 0.1) < 1e-9);
 });
 
 test("portfolio skips a trade when its fixed notional exceeds available funds", () => {

@@ -57,7 +57,7 @@ test("retracement limit uses the configured body percentage and cancels if unfil
   assert.equal(result.entryIndex, 1);
 
   const noFill = simulateTrade({
-    candles: data.map((c, i) => i ? { ...c, low: 109 } : c),
+    candles: data.map((c, i) => i === 1 ? { ...c, open: 109, low: 109, close: 109.5 } : c),
     signalIndex: 0, direction: "LONG",
     config: { ...base, entryMethod: "retracement_limit", retracementPct: 20, limitValidityBars: 1 }
   });

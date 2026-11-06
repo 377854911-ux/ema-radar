@@ -1,6 +1,6 @@
 # EMA Radar V1 — Development Specification
 
-Status: specification draft; implementation has not started.
+Status: implementation in progress; EMA signal engine and first mobile scanner interface are committed on the rebuild branch. Not deployed to production.
 Target branch: `rebuild/ema-v1`
 Production branch: `main` (must not be changed during development)
 

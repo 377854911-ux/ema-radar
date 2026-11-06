@@ -238,3 +238,63 @@ export async function fetchFundingHistory({
 }
 
 export const HISTORICAL_DAY_MS = DAY;
+
+
+const INTERVAL_MS = Object.freeze({
+  "10m": 600_000, "15m": 900_000, "30m": 1_800_000,
+  "1h": 3_600_000, "2h": 7_200_000, "4h": 14_400_000,
+  "6h": 21_600_000, "8h": 28_800_000, "12h": 43_200_000,
+  "1d": DAY
+});
+
+/**
+ * Downloads/caches the candle and funding inputs needed by the backtest.
+ * The daily universe is reconstructed first; intraday data is then fetched
+ * only for symbols that appear in at least one historical daily top-100 list.
+ */
+export async function fetchBacktestDataset({
+  startTime, endTime, timeframes, concurrency = 4, cache = createHistoricalCache(),
+  fetchImpl = fetch, onProgress = () => {}
+}) {
+  if (!Array.isArray(timeframes) || timeframes.length === 0) {
+    throw new TypeError("Select at least one backtest timeframe");
+  }
+  const selected = [...new Set(timeframes)];
+  for (const timeframe of selected) {
+    if (!INTERVAL_MS[timeframe]) throw new RangeError(`Unsupported timeframe: ${timeframe}`);
+  }
+
+  const universe = await buildHistoricalTop100({
+    startTime, endTime, concurrency, cache, fetchImpl,
+    onProgress: p => onProgress({ phase: "daily-universe", ...p })
+  });
+  const symbols = [...new Set(Object.values(universe.dailyUniverse).flat().map(row => row.symbol))];
+  const tasks = symbols.flatMap(symbol => selected.map(timeframe => ({ symbol, timeframe })));
+  const total = tasks.length + symbols.length;
+  let completed = 0;
+  const candleResults = await mapLimit(tasks, concurrency, async task => {
+    const warmupStart = Math.max(0, startTime - INTERVAL_MS[task.timeframe] * 110);
+    const candles = await fetchKlinesRange({
+      symbol: task.symbol, interval: task.timeframe, startTime: warmupStart,
+      endTime, cache, fetchImpl
+    });
+    completed++;
+    onProgress({ phase: "klines", completed, total, symbol: task.symbol, timeframe: task.timeframe });
+    return [`${task.symbol}|${task.timeframe}`, candles];
+  });
+  const fundingResults = await mapLimit(symbols, concurrency, async symbol => {
+    const events = await fetchFundingHistory({ symbol, startTime, endTime, fetchImpl });
+    completed++;
+    onProgress({ phase: "funding", completed, total, symbol });
+    return [symbol, events];
+  });
+  return {
+    startTime, endTime, timeframes: selected,
+    dailyUniverse: universe.dailyUniverse,
+    candlesBySymbolTimeframe: Object.fromEntries(candleResults),
+    fundingBySymbol: Object.fromEntries(fundingResults),
+    symbolsIncluded: symbols,
+    symbolsCheckedForDailyUniverse: universe.symbolsChecked,
+    limitations: universe.limitations
+  };
+}

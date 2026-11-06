@@ -146,8 +146,12 @@ export function simulatePortfolio(candidates, options = {}) {
     const opposite = accepted.find(x =>
       x.candidate.symbol === candidate.symbol
       && x.candidate.direction !== candidate.direction
-      && x.trade.entryTime <= candidate._signalTime
-      && (x.trade.exitTime == null || x.trade.exitTime > candidate._signalTime)
+      && (
+        (x.trade.entryTime <= candidate._signalTime
+          && (x.trade.exitTime == null || x.trade.exitTime > candidate._signalTime))
+        || (x.trade.entryTime <= trade.entryTime
+          && (x.trade.exitTime == null || x.trade.exitTime > trade.entryTime))
+      )
     );
     if (opposite) {
       skipped.push({ candidate, reason: "opposite_position_open_at_signal" });

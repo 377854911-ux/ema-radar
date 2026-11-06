@@ -231,16 +231,31 @@ export async function buildHistoricalTop100({
     return [symbol, candles];
   });
   const dailyCandlesBySymbol = Object.fromEntries(entries);
+  const dailyUniverse = buildDailyUniverse(dailyCandlesBySymbol, {
+    startTime: universeStartTime, endTime, limit: 100
+  });
+  const missingUniverseDays = [];
+  for (let day = universeStartTime; day < endTime; day += DAY) {
+    if (!Object.hasOwn(dailyUniverse, String(day))) missingUniverseDays.push(day);
+  }
+  const limitations = [
+    "Universe starts from contracts that are currently active; delisted historical contracts are not reconstructed.",
+    "Historical 24-hour price-change filter is approximated by each UTC daily candle open-to-close return.",
+    "Historical Monitoring labels are not available from the public endpoint used."
+  ];
+  if (missingUniverseDays.length) {
+    const dates = missingUniverseDays.map(day => new Date(day).toISOString().slice(0, 10));
+    limitations.push(
+      "Historical daily-universe data is missing for " + missingUniverseDays.length
+      + " UTC day(s): " + dates.join(", ") + ". Results for those days are incomplete."
+    );
+  }
   return {
-    dailyUniverse: buildDailyUniverse(dailyCandlesBySymbol, {
-      startTime: universeStartTime, endTime, limit: 100
-    }),
+    dailyUniverse,
+    missingUniverseDays,
+    expectedUniverseDays: Math.ceil((endTime - universeStartTime) / DAY),
     symbolsChecked: list.length,
-    limitations: [
-      "Universe starts from contracts that are currently active; delisted historical contracts are not reconstructed.",
-      "Historical 24-hour price-change filter is approximated by each UTC daily candle open-to-close return.",
-      "Historical Monitoring labels are not available from the public endpoint used."
-    ]
+    limitations
   };
 }
 
@@ -355,6 +370,8 @@ export async function fetchBacktestDataset({
   return {
     startTime, endTime, timeframes: selected,
     dailyUniverse: universe.dailyUniverse,
+    missingUniverseDays: universe.missingUniverseDays,
+    expectedUniverseDays: universe.expectedUniverseDays,
     candlesBySymbolTimeframe: Object.fromEntries(candleResults),
     fundingBySymbol: Object.fromEntries(fundingResults),
     symbolsIncluded: symbols,

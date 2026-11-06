@@ -83,57 +83,31 @@ function isValidCandle(candle) {
 }
 
 /**
- * Evaluate only the latest completed candle.
- * Requires 500 contiguous completed candles before evaluating the latest close.\n * The final candle in the input MUST be the currently forming candle.
- * This makes an old signal expire automatically once its following candle closes.
+ * Evaluate a completed candle using EMA values already calculated through its close.
+ * This is shared by full-history analysis and the incremental live scanner.
  */
-export function analyzeLatestClosedSignal(rawCandles, options = {}) {
-  const { timeframe = null, maxBodyPercent = null } = options;
-  if (!Array.isArray(rawCandles) || rawCandles.length < EMA_WARMUP_BARS + 2) {
-    return { signal: null, reason: "not_enough_candles" };
-  }
-
-  const candles = rawCandles.map(normalizeCandle);
-  if (TIMEFRAME_MINUTES[timeframe]) {
-    const intervalMs = TIMEFRAME_MINUTES[timeframe] * 60_000;
-    const history = candles.slice(-(EMA_WARMUP_BARS + 2));
-    for (let i = 0; i < history.length; i += 1) {
-      const candle = history[i];
-      if (!Number.isFinite(candle.openTime) || !Number.isFinite(candle.closeTime)
-          || candle.closeTime !== candle.openTime + intervalMs - 1
-          || (i > 0 && candle.openTime - history[i - 1].openTime !== intervalMs)) {
-        return { signal: null, reason: "insufficient_contiguous_candles" };
-      }
-    }
-  }
-  const forming = candles[candles.length - 1];
-  const signalIndex = candles.length - 2;
-  const signalCandle = candles[signalIndex];
-
-  if (!isValidCandle(forming) || !isValidCandle(signalCandle)) {
-    return { signal: null, reason: "invalid_latest_candle" };
-  }
-
-  const closedCandles = candles.slice(0, -1);
-  const closes = closedCandles.map(candle => candle.close);
+export function analyzeSignalCandle(rawSignalCandle, rawEmaValues, options = {}) {
+  const { timeframe = null, maxBodyPercent = null, expiresAt = null } = options;
+  const signalCandle = normalizeCandle(rawSignalCandle);
   const emaValues = Object.fromEntries(
-    EMA_PERIODS.map(period => [period, calculateEMA(closes, period)[signalIndex]])
+    EMA_PERIODS.map(period => [period, Number(rawEmaValues?.[period])])
   );
-
+  if (!isValidCandle(signalCandle)) {
+    return { signal: null, reason: "invalid_latest_candle", emaValues };
+  }
   if (EMA_PERIODS.some(period => !Number.isFinite(emaValues[period]))) {
-    return { signal: null, reason: "ema_warmup_incomplete" };
+    return { signal: null, reason: "ema_warmup_incomplete", emaValues };
   }
 
   const bodyPercent = Math.abs(signalCandle.close - signalCandle.open)
     / signalCandle.open * 100;
-
   if (maxBodyPercent !== null && maxBodyPercent !== undefined) {
     const threshold = Number(maxBodyPercent);
     if (!Number.isFinite(threshold) || threshold <= 0) {
-      return { signal: null, reason: "invalid_body_threshold" };
+      return { signal: null, reason: "invalid_body_threshold", emaValues };
     }
     if (bodyPercent >= threshold) {
-      return { signal: null, reason: "body_threshold_exceeded" };
+      return { signal: null, reason: "body_threshold_exceeded", emaValues };
     }
   }
 
@@ -149,13 +123,11 @@ export function analyzeLatestClosedSignal(rawCandles, options = {}) {
   } else if (allInsideBearBody && emaValues[100] > emaValues[25] && emaValues[100] > emaValues[50]) {
     direction = "SHORT";
   }
-
-  if (!direction) return { signal: null, reason: "conditions_not_met" };
+  if (!direction) return { signal: null, reason: "conditions_not_met", emaValues };
 
   const emaMin = Math.min(...values);
   const emaMax = Math.max(...values);
   const distanceRate = (emaMax - emaMin) / signalCandle.close * 100;
-
   return {
     signal: {
       direction,
@@ -168,11 +140,68 @@ export function analyzeLatestClosedSignal(rawCandles, options = {}) {
       ema50: emaValues[50],
       ema100: emaValues[100],
       distanceRate,
-      // This is the next candle, during which the just-closed signal may be acted on.
-      expiresAt: forming.closeTime
+      expiresAt
     },
-    reason: null
+    reason: null,
+    emaValues
   };
+}
+
+export function updateEMAValue(previousValue, close, period) {
+  if (!Number.isInteger(period) || period < 1) {
+    throw new RangeError("EMA period must be a positive integer.");
+  }
+  const previous = Number(previousValue);
+  const value = Number(close);
+  if (!Number.isFinite(previous) || !Number.isFinite(value)) return null;
+  const alpha = 2 / (period + 1);
+  return value * alpha + previous * (1 - alpha);
+}
+
+/**
+ * Evaluate only the latest completed candle.
+ * Requires 500 contiguous completed candles before evaluating the latest close.
+ * The final candle in the input MUST be the currently forming candle.
+ * This makes an old signal expire automatically once its following candle closes.
+ */
+export function analyzeLatestClosedSignal(rawCandles, options = {}) {
+  const { timeframe = null, maxBodyPercent = null } = options;
+  if (!Array.isArray(rawCandles) || rawCandles.length < EMA_WARMUP_BARS + 2) {
+    return { signal: null, reason: "not_enough_candles" };
+  }
+
+  const candles = rawCandles.slice(-(EMA_WARMUP_BARS + 2)).map(normalizeCandle);
+  if (TIMEFRAME_MINUTES[timeframe]) {
+    const intervalMs = TIMEFRAME_MINUTES[timeframe] * 60_000;
+    for (let i = 0; i < candles.length; i += 1) {
+      const candle = candles[i];
+      if (!Number.isFinite(candle.openTime) || !Number.isFinite(candle.closeTime)
+          || candle.closeTime !== candle.openTime + intervalMs - 1
+          || (i > 0 && candle.openTime - candles[i - 1].openTime !== intervalMs)) {
+        return { signal: null, reason: "insufficient_contiguous_candles" };
+      }
+    }
+  }
+
+  const forming = candles[candles.length - 1];
+  const signalCandle = candles[candles.length - 2];
+  if (!isValidCandle(forming) || !isValidCandle(signalCandle)) {
+    return { signal: null, reason: "invalid_latest_candle" };
+  }
+
+  const closedCandles = candles.slice(0, -1);
+  const closes = closedCandles.map(candle => candle.close);
+  const signalIndex = closedCandles.length - 1;
+  const emaValues = Object.fromEntries(
+    EMA_PERIODS.map(period => [period, calculateEMA(closes, period)[signalIndex]])
+  );
+  if (EMA_PERIODS.some(period => !Number.isFinite(emaValues[period]))) {
+    return { signal: null, reason: "ema_warmup_incomplete" };
+  }
+
+  return analyzeSignalCandle(signalCandle, emaValues, {
+    timeframe, maxBodyPercent, expiresAt: forming.closeTime
+  });
 }
 
 /**

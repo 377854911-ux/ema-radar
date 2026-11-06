@@ -59,8 +59,8 @@ test("detects a bearish candle containing all three EMAs with EMA100 highest aft
   const e100 = calculateEMA(closes, 100).at(-1);
   const open = Math.max(e25, e50, e100) + 1;
   const close = Math.min(e25, e50, e100) - 1;
-  candles.push(makeCandle(6_000_000, open, open + 0.1, close - 0.1, close));
-  candles.push(makeCandle(6_060_000, close, close + 0.2, close - 0.2, close - 0.1));
+  candles.push(makeCandle(30_000_000, open, open + 0.1, close - 0.1, close));
+  candles.push(makeCandle(30_060_000, close, close + 0.2, close - 0.2, close - 0.1));
   const result = analyzeLatestClosedSignal(candles, { timeframe: "1m" });
   assert.equal(result.signal?.direction, "SHORT");
   assert.ok(result.signal.ema100 > result.signal.ema25);

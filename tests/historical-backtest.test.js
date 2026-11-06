@@ -123,3 +123,21 @@ test("does not carry EMA signals or trades across missing candle intervals", () 
   assert.equal(result.scanStats.missingIntervals, 1);
   assert.equal(result.scanStats.signalsFound, 0);
 });
+
+test("reports positions that remain open at the end of the backtest window", () => {
+  const dataset = makeDataset();
+  dataset.candlesBySymbolTimeframe["TESTUSDT|15m"][106] = {
+    openTime: 106 * 900_000, closeTime: 107 * 900_000 - 1,
+    open: 110, high: 111, low: 109, close: 110.5
+  };
+  dataset.candlesBySymbolTimeframe["TESTUSDT|15m"][107] = {
+    openTime: 107 * 900_000, closeTime: 108 * 900_000 - 1,
+    open: 110.5, high: 112, low: 109, close: 111
+  };
+  const result = runHistoricalBacktest(dataset, {
+    timeframes: ["15m"], initialCapital: 10_000, maxOpenTrades: 5, tradeConfig
+  });
+  assert.equal(result.accepted.length, 1);
+  assert.equal(result.accepted[0].status, "open");
+  assert.equal(result.report.openTrades, 1);
+});

@@ -24,13 +24,16 @@ function readCandle(raw) {
   if (Array.isArray(raw)) {
     return {
       openTime: Number(raw[0]), open: Number(raw[1]), high: Number(raw[2]),
-      low: Number(raw[3]), close: Number(raw[4]), closeTime: Number(raw[6])
+      low: Number(raw[3]), close: Number(raw[4]),
+      closeTime: raw[6] === null || raw[6] === undefined ? null : Number(raw[6])
     };
   }
   return {
     openTime: Number(raw?.openTime), open: Number(raw?.open),
     high: Number(raw?.high), low: Number(raw?.low),
-    close: Number(raw?.close), closeTime: Number(raw?.closeTime)
+    close: Number(raw?.close),
+    closeTime: raw?.closeTime === null || raw?.closeTime === undefined
+      ? null : Number(raw.closeTime)
   };
 }
 

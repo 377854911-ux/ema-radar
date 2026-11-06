@@ -1,5 +1,6 @@
 import { calculateEMA, TIMEFRAME_MINUTES } from "./ema-engine.js";
 import { simulatePortfolio } from "./portfolio-engine.js";
+import { isFundingRateAllowed, latestKnownFundingRate } from "./funding-filter.js";
 
 export const BACKTEST_PERIOD_DAYS = Object.freeze([7, 30, 60]);
 const DAY_MS = 86_400_000;
@@ -62,7 +63,10 @@ function splitContiguousCandles(rawCandles, timeframe) {
  * Calculate each EMA series once, then inspect candles in linear time.
  * Values at index i only depend on closes up to i, so no future data leaks in.
  */
-function findSignalsForSeries({ symbol, timeframe, rawCandles, dataset, settings, tradeConfig, onSignal }) {
+function findSignalsForSeries({
+  symbol, timeframe, rawCandles, dataset, settings, tradeConfig, onSignal,
+  fundingFilterPct = 0, onFundingFilter = () => {}
+}) {
   const candles = rawCandles.map(readCandle);
   if (candles.length < 102) return [];
   const closes = candles.map(c => c.close);
@@ -108,6 +112,23 @@ function findSignalsForSeries({ symbol, timeframe, rawCandles, dataset, settings
     }
     if (!direction) continue;
 
+    let fundingRateAtSignal = null;
+    if (fundingFilterPct > 0) {
+      const knownFunding = latestKnownFundingRate(
+        dataset.fundingBySymbol?.[symbol] ?? [],
+        Number(signalCandle.closeTime ?? (signalCandle.openTime + TIMEFRAME_MINUTES[timeframe] * 60_000 - 1))
+      );
+      if (!knownFunding) {
+        onFundingFilter("unavailable");
+        continue;
+      }
+      fundingRateAtSignal = knownFunding.rate;
+      if (!isFundingRateAllowed(fundingRateAtSignal, fundingFilterPct)) {
+        onFundingFilter("filtered");
+        continue;
+      }
+    }
+
     const distanceRate = (Math.max(...values) - Math.min(...values))
       / signalCandle.close * 100;
     const signal = {
@@ -115,6 +136,7 @@ function findSignalsForSeries({ symbol, timeframe, rawCandles, dataset, settings
       timeframe,
       direction,
       distanceRate,
+      fundingRateAtSignal,
       candles: rawCandles,
       signalIndex: i,
       config: tradeConfig
@@ -167,6 +189,10 @@ export async function runHistoricalBacktest(dataset, config = {}, options = {}) 
     throw new TypeError("tradeConfig is required");
   }
 
+  const fundingFilterPct = Number(config.fundingFilterPct ?? 0);
+  if (!Number.isFinite(fundingFilterPct) || fundingFilterPct < 0) {
+    throw new RangeError("fundingFilterPct must be a non-negative percentage");
+  }
   const selectedTimeframes = [...new Set(config.timeframes ?? dataset.timeframes ?? [])];
   if (!selectedTimeframes.length) throw new TypeError("Select at least one timeframe");
   for (const timeframe of selectedTimeframes) {
@@ -179,6 +205,8 @@ export async function runHistoricalBacktest(dataset, config = {}, options = {}) 
     symbolTimeframeSeries: 0,
     candlesEvaluated: 0,
     signalsFound: 0,
+    fundingFilteredSignals: 0,
+    fundingRateUnavailableSignals: 0,
     missingIntervals: 0,
     missingSeries: []
   };
@@ -222,7 +250,12 @@ export async function runHistoricalBacktest(dataset, config = {}, options = {}) 
         }
         const found = findSignalsForSeries({
           symbol, timeframe, rawCandles: segment, dataset, settings, tradeConfig,
-          onSignal: options.onSignal
+          onSignal: options.onSignal,
+          fundingFilterPct,
+          onFundingFilter: reason => {
+            if (reason === "filtered") scanStats.fundingFilteredSignals++;
+            else if (reason === "unavailable") scanStats.fundingRateUnavailableSignals++;
+          }
         });
         candidates.push(...found);
         timeframeSignals += found.length;

@@ -517,3 +517,21 @@ test("funding settlements across symbols are applied in global timestamp order",
   assert.deepEqual(settlements.map(event => event.symbol), ["Z_EARLIERUSDT", "A_LATERUSDT"]);
   assert.equal(result.capital.accountBalance, 10_000);
 });
+
+
+test("same symbol can hold multiple same-direction positions from different signal times", () => {
+  const candles = longCandles();
+  const candidates = [
+    { symbol: "REENTRYUSDT", timeframe: "1h", direction: "LONG", distanceRate: 0.1, candles, signalIndex: 0, config },
+    { symbol: "REENTRYUSDT", timeframe: "1h", direction: "LONG", distanceRate: 0.1, candles, signalIndex: 1, config }
+  ];
+
+  const allowed = simulatePortfolio(candidates, { maxOpenTrades: 2 });
+  assert.equal(allowed.accepted.length, 2);
+  assert.deepEqual(allowed.accepted.map(trade => trade.entryTime), [10, 20]);
+  assert.equal(allowed.accepted.every(trade => trade.symbol === "REENTRYUSDT" && trade.direction === "LONG"), true);
+
+  const capped = simulatePortfolio(candidates, { maxOpenTrades: 1 });
+  assert.equal(capped.accepted.length, 1);
+  assert.equal(capped.skipped.some(item => item.reason === "max_open_trades_reached"), true);
+});

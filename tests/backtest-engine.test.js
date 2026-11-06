@@ -263,3 +263,34 @@ test("short stop gap fills at the worse candle open, not the stop trigger", () =
   assert.equal(result.exitPrice, 102);
   assert.ok(result.grossPnl < -20);
 });
+
+
+test("long take-profit gap at candle open fills at the better open before a later stop touch", () => {
+  const data = [
+    { openTime: 0, closeTime: 9, open: 98, high: 101, low: 97, close: 100 },
+    { openTime: 10, closeTime: 19, open: 100, high: 101, low: 99, close: 100 },
+    { openTime: 20, closeTime: 29, open: 104, high: 105, low: 97, close: 100 },
+    { openTime: 30, closeTime: 39, open: 100, high: 101, low: 99, close: 100 }
+  ];
+  const result = simulateTrade({
+    candles: data, signalIndex: 0, direction: "LONG", config: base
+  });
+  assert.equal(result.exitReason, "take_profit");
+  assert.equal(result.exitPrice, 104);
+  assert.equal(result.grossPnl, 20);
+});
+
+test("short take-profit gap at candle open fills at the better open before a later stop touch", () => {
+  const data = [
+    { openTime: 0, closeTime: 9, open: 102, high: 103, low: 99, close: 100 },
+    { openTime: 10, closeTime: 19, open: 100, high: 101, low: 99, close: 100 },
+    { openTime: 20, closeTime: 29, open: 96, high: 103, low: 95, close: 100 },
+    { openTime: 30, closeTime: 39, open: 100, high: 101, low: 99, close: 100 }
+  ];
+  const result = simulateTrade({
+    candles: data, signalIndex: 0, direction: "SHORT", config: base
+  });
+  assert.equal(result.exitReason, "take_profit");
+  assert.equal(result.exitPrice, 96);
+  assert.equal(result.grossPnl, 20);
+});

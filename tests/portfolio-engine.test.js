@@ -231,3 +231,54 @@ test("drawdown is unknown when a funding-incomplete trade breaks cash accounting
   assert.equal(result.capital.capitalAccountingComplete, false);
   assert.equal(result.summary.maxDrawdownPct, null);
 });
+
+
+test("simultaneous losing exits count as one order-independent settlement batch", () => {
+  function losingCandles() {
+    return [
+      { openTime: 0, closeTime: 9, open: 98, high: 101, low: 97, close: 100 },
+      { openTime: 10, closeTime: 19, open: 100, high: 101, low: 97, close: 99 },
+      { openTime: 20, closeTime: 29, open: 99, high: 100, low: 98, close: 99 }
+    ];
+  }
+  const candidates = ["LOSS_AUSDT", "LOSS_BUSDT"].map(symbol => ({
+    symbol, timeframe: "1h", direction: "LONG", distanceRate: 0.1,
+    candles: losingCandles(), signalIndex: 0, config
+  }));
+  const forward = simulatePortfolio(candidates);
+  const reversed = simulatePortfolio([...candidates].reverse());
+
+  for (const result of [forward, reversed]) {
+    assert.equal(result.accepted.length, 2);
+    assert.deepEqual(result.accepted.map(trade => trade.exitTime), [19, 19]);
+    assert.equal(result.capital.consecutiveLosses, 1);
+    const replenishments = result.capital.events.filter(event => event.type === "loss_replenishment_batch");
+    assert.equal(replenishments.length, 1);
+    assert.equal(replenishments[0].batchNetPnl, -20);
+    assert.equal(replenishments[0].lossStreak, 1);
+    assert.equal(replenishments[0].targetBalance, 11_000);
+    assert.equal(result.capital.accountBalance, 11_000);
+    assert.equal(result.capital.cumulativeTopUps, 1_020);
+  }
+  assert.equal(forward.capital.accountBalance, reversed.capital.accountBalance);
+  assert.equal(forward.capital.consecutiveLosses, reversed.capital.consecutiveLosses);
+  assert.equal(forward.capital.cumulativeTopUps, reversed.capital.cumulativeTopUps);
+});
+
+test("simultaneous mixed exits use their combined net result for the loss streak", () => {
+  const winner = longCandles();
+  const loser = [
+    { openTime: 0, closeTime: 9, open: 98, high: 101, low: 97, close: 100 },
+    { openTime: 10, closeTime: 19, open: 100, high: 101, low: 97, close: 99 },
+    { openTime: 20, closeTime: 29, open: 99, high: 100, low: 98, close: 99 }
+  ];
+  const result = simulatePortfolio([
+    { symbol: "WIN_BATCHUSDT", timeframe: "1h", direction: "LONG", distanceRate: 0.1, candles: winner, signalIndex: 0, config },
+    { symbol: "LOSS_BATCHUSDT", timeframe: "1h", direction: "LONG", distanceRate: 0.1, candles: loser, signalIndex: 0, config }
+  ]);
+  assert.equal(result.accepted.length, 2);
+  assert.equal(result.accepted[0].exitTime, result.accepted[1].exitTime);
+  assert.equal(result.capital.consecutiveLosses, 0);
+  assert.equal(result.capital.events.some(event => event.type === "loss_replenishment_batch"), false);
+  assert.equal(result.capital.accountBalance, 10_000);
+});

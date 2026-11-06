@@ -59,10 +59,11 @@ export function buildDailyUniverse(dailyCandlesBySymbol, { startTime, endTime, l
     for (const candle of candles || []) {
       const day = candle.openTime;
       if (day < startTime || day >= endTime) continue;
+      // Preserve the day key even when every symbol is filtered by the move limit.
+      if (!byDay.has(day)) byDay.set(day, []);
       if (!(candle.quoteVolume >= 0) || !(candle.open > 0) || !(candle.close > 0)) continue;
       const changePct = (candle.close - candle.open) / candle.open * 100;
       if (changePct > 30 || changePct < -30) continue;
-      if (!byDay.has(day)) byDay.set(day, []);
       byDay.get(day).push({
         symbol,
         dayOpenTime: day,

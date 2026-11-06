@@ -211,7 +211,8 @@ test("realized net profit, fee deductions, funding and account balance reconcile
   assert.ok(Math.abs(result.capital.availableBalance - result.capital.accountBalance) < 1e-9);
   // Entry fee is a real cash outflow at entry, so it contributes to drawdown
   // before the later profitable settlement.
-  assert.ok(Math.abs(result.summary.maxDrawdownPct - 0.005) < 1e-9);
+  assert.ok(Math.abs(result.summary.maxDrawdownPct - 0.01) < 1e-9);
+  assert.equal(result.capital.events.some(event => event.type === "open_position_funding" && event.time === 15), true);
 });
 
 

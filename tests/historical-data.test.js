@@ -67,6 +67,9 @@ test("downloads enough pre-period candles to warm up EMA100", async () => {
   assert.ok(intraday);
   assert.equal(Number(intraday.searchParams.get("startTime")),
     startTime - EMA_WARMUP_BARS * 900_000);
+  const funding = requests.find(url => url.pathname.endsWith("/fundingRate"));
+  assert.ok(funding);
+  assert.equal(Number(funding.searchParams.get("startTime")), startTime - 8 * 86_400_000);
   assert.equal(EMA_WARMUP_BARS, 500);
 });
 

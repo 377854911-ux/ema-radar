@@ -154,6 +154,22 @@ test("does not carry EMA signals or trades across missing candle intervals", asy
   assert.equal(result.scanStats.signalsFound, 0);
 });
 
+test("a data gap forces a fresh 500-bar EMA warm-up before new signals", async () => {
+  const dataset = makeDataset();
+  for (let i = 250; i < dataset.candlesBySymbolTimeframe["TESTUSDT|15m"].length; i++) {
+    dataset.candlesBySymbolTimeframe["TESTUSDT|15m"][i].openTime += 900_000;
+    dataset.candlesBySymbolTimeframe["TESTUSDT|15m"][i].closeTime += 900_000;
+  }
+  const result = await runHistoricalBacktest(dataset, {
+    timeframes: ["15m"], initialCapital: 10_000, maxOpenTrades: 5, tradeConfig
+  });
+  assert.equal(result.scanStats.missingIntervals, 1);
+  assert.equal(result.scanStats.signalsFound, 0);
+  assert.ok(result.scanStats.missingSeries.some(item =>
+    item.reason === "contiguous_segment_too_short_after_data_gap"
+  ));
+});
+
 test("reports positions that remain open at the end of the backtest window", async () => {
   const dataset = makeDataset();
   const entry = dataset.candlesBySymbolTimeframe["TESTUSDT|15m"][505].close;

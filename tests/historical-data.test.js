@@ -43,7 +43,7 @@ test("retains a UTC day key when all daily symbols are excluded by the 30 percen
 });
 
 test("reports missing daily universe dates instead of silently treating them as no signals", async () => {
-  const startTime = 1_800_000_000_000;
+  const startTime = Math.floor(1_800_000_000_000 / 86_400_000) * 86_400_000;
   const endTime = startTime + 86_400_000;
   const priorDay = Math.floor(startTime / 86_400_000) * 86_400_000 - 86_400_000;
   const result = await fetchBacktestDataset({

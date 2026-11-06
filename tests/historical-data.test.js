@@ -210,6 +210,27 @@ test("funding history preserves conflicting same-time records for downstream amb
   assert.equal(cachedValue.length, 3);
 });
 
+test("rejects malformed non-array kline responses instead of caching empty history", async () => {
+  let cacheWrites = 0;
+  await assert.rejects(() => fetchKlinesRange({
+    symbol: "TESTUSDT", interval: "15m", startTime: 100, endTime: 1000,
+    cache: {
+      async get() { return null; },
+      async put() { cacheWrites++; }
+    },
+    fetchImpl: async () => ({ ok: true, json: async () => ({ code: -1, msg: "unexpected response" }) })
+  }), /invalid kline response/);
+  assert.equal(cacheWrites, 0);
+});
+
+test("rejects malformed non-array funding responses", async () => {
+  await assert.rejects(() => fetchFundingHistory({
+    symbol: "TESTUSDT", startTime: 100, endTime: 1000,
+    cache: { async get() { return null; }, async put() {} },
+    fetchImpl: async () => ({ ok: true, json: async () => ({ code: -1, msg: "unexpected response" }) })
+  }), /invalid funding response/);
+});
+
 test("rejects conflicting duplicate historical kline rows instead of choosing one", async () => {
   const row = [100, "100", "102", "99", "101", "10", 199, "1000"];
   const conflicting = [...row];

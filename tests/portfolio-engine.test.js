@@ -286,3 +286,60 @@ test("simultaneous mixed exits use their combined net result for the loss streak
   assert.equal(result.capital.events.some(event => event.type === "loss_replenishment" && event.batch === true), false);
   assert.equal(result.capital.accountBalance, 10_000);
 });
+
+
+test("open positions apply known funding through the final candle without realizing price PnL", () => {
+  const candles = [
+    { openTime: 0, closeTime: 9, open: 98, high: 101, low: 97, close: 100 },
+    { openTime: 10, closeTime: 19, open: 100, high: 101, low: 99, close: 100 },
+    { openTime: 20, closeTime: 29, open: 100, high: 101, low: 99, close: 100 }
+  ];
+  const result = simulatePortfolio([{
+    symbol: "OPENFUNDINGUSDT",
+    timeframe: "1h",
+    direction: "LONG",
+    distanceRate: 0.1,
+    candles,
+    signalIndex: 0,
+    config: { ...config, entryFeeRate: 0.1 },
+    fundingEvents: [{ fundingTime: 15, rate: 0.001, markPrice: 100 }]
+  }]);
+
+  const trade = result.accepted[0];
+  assert.equal(trade.status, "open");
+  assert.equal(trade.exitTime, null);
+  assert.equal(trade.fundingPnl, -0.5);
+  assert.equal(trade.fundingComplete, true);
+  assert.equal(result.capital.accountBalance, 9_999);
+  assert.equal(result.capital.usedCapital, 500);
+  assert.equal(result.capital.availableBalance, 9_499);
+  assert.equal(result.summary.totalTrades, 0);
+  assert.equal(result.summary.netProfit, 0);
+  assert.equal(result.capital.events.some(event => event.type === "open_position_funding" && event.fundingPnl === -0.5), true);
+});
+
+test("open position with funding at the uncertain entry timestamp makes cash accounting incomplete", () => {
+  const candles = [
+    { openTime: 0, closeTime: 9, open: 98, high: 101, low: 97, close: 100 },
+    { openTime: 10, closeTime: 19, open: 100, high: 101, low: 99, close: 100 },
+    { openTime: 20, closeTime: 29, open: 100, high: 101, low: 99, close: 100 }
+  ];
+  const result = simulatePortfolio([{
+    symbol: "OPENUNKNOWNFUNDINGUSDT",
+    timeframe: "1h",
+    direction: "LONG",
+    distanceRate: 0.1,
+    candles,
+    signalIndex: 0,
+    config,
+    fundingEvents: [{ fundingTime: 10, rate: 0.001, markPrice: 100 }]
+  }]);
+
+  assert.equal(result.accepted[0].status, "open");
+  assert.equal(result.accepted[0].fundingComplete, false);
+  assert.equal(result.capital.capitalAccountingComplete, false);
+  assert.equal(result.capital.accountBalance, null);
+  assert.equal(result.capital.availableBalance, null);
+  assert.equal(result.capital.usedCapital, 500);
+  assert.equal(result.summary.maxDrawdownPct, null);
+});

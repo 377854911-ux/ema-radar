@@ -126,3 +126,23 @@ test("portfolio drawdown follows realized exit order when trades overlap", () =>
   assert.equal(result.accepted[1].exitTime, 29);
   assert.ok(Math.abs(result.summary.maxDrawdownPct - 0.1) < 1e-9);
 });
+
+
+test("ambiguous same-candle exit pays fees but does not increase the loss streak", () => {
+  const collision = [
+    { openTime: 0, closeTime: 9, open: 98, high: 101, low: 97, close: 100 },
+    { openTime: 10, closeTime: 19, open: 100, high: 105, low: 97, close: 101 },
+    { openTime: 20, closeTime: 29, open: 101, high: 102, low: 100, close: 101 }
+  ];
+  const result = simulatePortfolio([{
+    symbol: "AMBIGUOUSUSDT", timeframe: "1h", direction: "LONG",
+    distanceRate: 0.1, candles: collision, signalIndex: 0,
+    config: { ...config, entryFeeRate: 0.1, exitFeeRate: 0.1 }
+  }]);
+  assert.equal(result.accepted[0].exitReason, "ambiguous_both_touched");
+  assert.equal(result.accepted[0].grossPnl, 0);
+  assert.equal(result.accepted[0].netPnl, -1);
+  assert.equal(result.capital.consecutiveLosses, 0);
+  assert.equal(result.capital.events.some(event => event.type === "ambiguous_trade"), true);
+  assert.equal(result.capital.events.some(event => event.type === "loss_replenishment"), false);
+});

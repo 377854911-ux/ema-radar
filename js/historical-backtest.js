@@ -37,9 +37,9 @@ function readCandle(raw) {
   };
 }
 
-function validCandle(c) {
+function validCandle(c, intervalMs) {
   return [c.openTime, c.closeTime, c.open, c.high, c.low, c.close].every(Number.isFinite)
-    && c.closeTime >= c.openTime
+    && c.closeTime === c.openTime + intervalMs - 1
     && c.open > 0 && c.low > 0
     && c.high >= Math.max(c.open, c.close)
     && c.low <= Math.min(c.open, c.close);
@@ -48,18 +48,27 @@ function validCandle(c) {
 function splitContiguousCandles(rawCandles, timeframe) {
   const intervalMs = TIMEFRAME_MINUTES[timeframe] * 60_000;
   const segments = [];
-  let start = 0;
+  let current = [];
+  let previousOpenTime = null;
   let missingIntervals = 0;
-  for (let i = 1; i < rawCandles.length; i++) {
-    const previous = readCandle(rawCandles[i - 1]);
-    const current = readCandle(rawCandles[i]);
-    if (current.openTime - previous.openTime !== intervalMs) {
-      segments.push(rawCandles.slice(start, i));
-      start = i;
+
+  for (const raw of rawCandles) {
+    const candle = readCandle(raw);
+    if (candle.closeTime === null && Number.isFinite(candle.openTime)) {
+      candle.closeTime = candle.openTime + intervalMs - 1;
+    }
+    const valid = validCandle(candle, intervalMs);
+    const contiguous = previousOpenTime === null
+      || candle.openTime - previousOpenTime === intervalMs;
+    if (!valid || !contiguous) {
+      if (current.length) segments.push(current);
+      current = [];
       missingIntervals++;
     }
+    if (valid) current.push(candle);
+    previousOpenTime = valid ? candle.openTime : null;
   }
-  if (rawCandles.length) segments.push(rawCandles.slice(start));
+  if (current.length) segments.push(current);
   return { segments, missingIntervals };
 }
 
@@ -97,7 +106,7 @@ function findSignalsForSeries({
     const universeDay = dayStart(timestamp) - DAY_MS;
     const dailyRows = dataset.dailyUniverse[String(universeDay)] ?? dataset.dailyUniverse[universeDay] ?? [];
     if (!dailyRows.some(row => row.symbol === symbol)) continue;
-    if (!validCandle(signalCandle) || !validCandle(nextCandle)) continue;
+    if (!validCandle(signalCandle, intervalMs) || !validCandle(nextCandle, intervalMs)) continue;
 
     const values = [ema25[i], ema50[i], ema100[i]];
     if (!values.every(Number.isFinite)) continue;

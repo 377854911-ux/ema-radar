@@ -175,7 +175,7 @@ async function run(){
  $("run").disabled=true;$("progress").style.width="0%";$("report").textContent="正在准备数据…";resetLive();
  try{
   const range=createBacktestRange(s.periodDays);
-  const dataset=await fetchBacktestDataset({...range,timeframes:s.timeframes,concurrency:1,onProgress:p=>{
+  const dataset=await fetchBacktestDataset({...range,timeframes:s.timeframes,concurrency:3,onProgress:p=>{
    const stage=p.phase==="daily-universe"?"历史每日成交额名单":p.phase==="klines"?"下载历史K线":"下载历史资金费率";
    if(p.total){$("progress").style.width=Math.min(99,p.completed/p.total*100)+"%";$("status").textContent=stage+"："+p.completed+"/"+p.total+(p.symbol?" · "+p.symbol:"")}
   }});

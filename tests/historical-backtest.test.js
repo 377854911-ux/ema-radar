@@ -156,13 +156,14 @@ test("does not carry EMA signals or trades across missing candle intervals", asy
 
 test("reports positions that remain open at the end of the backtest window", async () => {
   const dataset = makeDataset();
+  const entry = dataset.candlesBySymbolTimeframe["TESTUSDT|15m"][505].close;
   dataset.candlesBySymbolTimeframe["TESTUSDT|15m"][506] = {
     openTime: 506 * 900_000, closeTime: 507 * 900_000 - 1,
-    open: 110, high: 111, low: 109, close: 110.5
+    open: entry, high: entry * 1.002, low: entry * 0.998, close: entry * 1.001
   };
   dataset.candlesBySymbolTimeframe["TESTUSDT|15m"][507] = {
     openTime: 507 * 900_000, closeTime: 508 * 900_000 - 1,
-    open: 110.5, high: 112, low: 109, close: 111
+    open: entry * 1.001, high: entry * 1.003, low: entry * 0.999, close: entry * 1.002
   };
   const result = await runHistoricalBacktest(dataset, {
     timeframes: ["15m"], initialCapital: 10_000, maxOpenTrades: 5, tradeConfig

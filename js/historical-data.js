@@ -14,6 +14,7 @@
 const API = "https://fapi.binance.com";
 const DAY = 86_400_000;
 const MAX_KLINES = 1500;
+export const EMA_WARMUP_BARS = 500;
 
 async function requestJSON(url, fetchImpl = fetch) {
   const response = await fetchImpl(url, { headers: { Accept: "application/json" } });
@@ -278,7 +279,7 @@ export async function fetchBacktestDataset({
   const total = tasks.length + symbols.length;
   let completed = 0;
   const candleResults = await mapLimit(tasks, concurrency, async task => {
-    const warmupStart = Math.max(0, startTime - INTERVAL_MS[task.timeframe] * 110);
+    const warmupStart = Math.max(0, startTime - INTERVAL_MS[task.timeframe] * EMA_WARMUP_BARS);
     const candles = await fetchKlinesRange({
       symbol: task.symbol, interval: task.timeframe, startTime: warmupStart,
       endTime, cache, fetchImpl

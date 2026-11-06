@@ -204,10 +204,15 @@ export function simulateTrade({ candles, signalIndex, direction, config, funding
     }
 
     if (timeoutBars !== null) {
-      countedBars += 1;
-      if (countedBars >= timeoutBars) {
-        exit = { index: i, reason: "timeout", rawPrice: c.close, price: adversePrice(c.close, direction, slippageRate, false), time: c.closeTime ?? c.openTime };
-        break;
+      // A limit order may fill intrabar; its partial entry candle is not a
+      // complete candle elapsed after the fill and must not consume timeout.
+      const isPartialLimitEntryCandle = config.entryMethod === "retracement_limit" && i === entryIndex;
+      if (!isPartialLimitEntryCandle) {
+        countedBars += 1;
+        if (countedBars >= timeoutBars) {
+          exit = { index: i, reason: "timeout", rawPrice: c.close, price: adversePrice(c.close, direction, slippageRate, false), time: c.closeTime ?? c.openTime };
+          break;
+        }
       }
     }
   }

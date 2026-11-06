@@ -87,41 +87,70 @@ export function simulatePortfolio(candidates, options = {}) {
     const due = accepted
       .filter(item => !settled.has(item) && item.trade.exitTime != null && item.trade.exitTime <= timestamp)
       .sort((a, b) => a.trade.exitTime - b.trade.exitTime || a.candidate._index - b.candidate._index);
-    for (const item of due) {
-      settled.add(item);
-      usedCapital = Math.max(0, usedCapital - item.trade.notional);
-      if (item.trade.status !== "closed" || !Number.isFinite(item.trade.netPnl)) {
-        // Unknown funding means we cannot safely calculate account capital or loss streak.
-        capitalAccountingComplete = false;
-        capitalEvents.push({
-          time: item.trade.exitTime,
-          symbol: item.candidate.symbol,
-          type: "incomplete_trade",
-          reason: item.trade.reason ?? "unclassifiable_trade"
-        });
-        continue;
+
+    // All trades closing at the same timestamp form one settlement batch.
+    // This prevents candidate ordering from changing the loss-streak/top-up logic.
+    let cursor = 0;
+    while (cursor < due.length) {
+      const exitTime = due[cursor].trade.exitTime;
+      const batch = [];
+      while (cursor < due.length && due[cursor].trade.exitTime === exitTime) {
+        const item = due[cursor++];
+        settled.add(item);
+        batch.push(item);
       }
 
-      // Entry fee was deducted when the position opened. Settle gross PnL,
-      // exit fee and known funding now; the combined lifetime change equals netPnl.
-      accountBalance += item.trade.grossPnl - item.trade.exitFee + item.trade.fundingPnl;
-      equitySnapshots.push({
-        time: item.trade.exitTime,
-        balance: accountBalance,
-        type: "trade_settlement"
-      });
-      if (item.trade.exitReason === "ambiguous_both_touched") {
-        // A same-candle TP/SL collision is neutral for win/loss streaks.
-        capitalEvents.push({
-          time: item.trade.exitTime,
-          symbol: item.candidate.symbol,
-          type: "ambiguous_trade",
-          netPnl: item.trade.netPnl,
-          lossStreak
-        });
-        continue;
+      let batchNetPnl = 0;
+      let batchHasClassifiableOutcome = false;
+      let batchHasAmbiguous = false;
+      let batchIncomplete = false;
+
+      for (const item of batch) {
+        usedCapital = Math.max(0, usedCapital - item.trade.notional);
+        if (item.trade.status !== "closed" || !Number.isFinite(item.trade.netPnl)) {
+          // Unknown funding means we cannot safely calculate account capital or loss streak.
+          capitalAccountingComplete = false;
+          batchIncomplete = true;
+          capitalEvents.push({
+            time: exitTime,
+            symbol: item.candidate.symbol,
+            type: "incomplete_trade",
+            reason: item.trade.reason ?? "unclassifiable_trade"
+          });
+          continue;
+        }
+
+        // Entry fee was deducted when the position opened. Apply each known
+        // settlement cash flow, but make the streak decision once per timestamp.
+        accountBalance += item.trade.grossPnl - item.trade.exitFee + item.trade.fundingPnl;
+        if (item.trade.exitReason === "ambiguous_both_touched") {
+          batchHasAmbiguous = true;
+          capitalEvents.push({
+            time: exitTime,
+            symbol: item.candidate.symbol,
+            type: "ambiguous_trade",
+            netPnl: item.trade.netPnl,
+            lossStreak
+          });
+          continue;
+        }
+        batchNetPnl += item.trade.netPnl;
+        batchHasClassifiableOutcome = true;
       }
-      if (item.trade.netPnl < 0) {
+
+      if (batch.some(item => item.trade.status === "closed" && Number.isFinite(item.trade.netPnl))) {
+        equitySnapshots.push({
+          time: exitTime,
+          balance: accountBalance,
+          type: "trade_settlement_batch"
+        });
+      }
+
+      // Do not make a partial streak decision when any trade in this timestamp
+      // has unknown cash flows. Ambiguous trades are excluded from the batch PnL.
+      if (batchIncomplete || !batchHasClassifiableOutcome) continue;
+
+      if (batchNetPnl < 0) {
         lossStreak += 1;
         const bonusPct = Math.min(lossStreak, 5) * 10;
         const restoreAdjustment = initialCapital - accountBalance;
@@ -132,18 +161,18 @@ export function simulatePortfolio(candidates, options = {}) {
         const normalizationWithdrawal = Math.max(0, -netAdjustment);
         accountBalance = targetBalance;
         equitySnapshots.push({
-          time: item.trade.exitTime,
+          time: exitTime,
           balance: accountBalance,
-          type: "capital_replenishment"
+          type: "capital_replenishment_batch"
         });
         actualCashInjected += topUp;
-        // The user's replenishment schedule is tracked at its stated nominal
-        // restore-plus-bonus amount; actual net deposits are shown separately.
         cumulativeTopUps += Math.max(0, restoreAdjustment) + bonusAmount;
         capitalEvents.push({
-          time: item.trade.exitTime,
-          symbol: item.candidate.symbol,
-          type: "loss_replenishment",
+          time: exitTime,
+          symbols: batch.filter(item => item.trade.status === "closed" && Number.isFinite(item.trade.netPnl))
+            .map(item => item.candidate.symbol),
+          type: "loss_replenishment_batch",
+          batchNetPnl,
           lossStreak,
           restoreAdjustment,
           bonusAmount,
@@ -152,13 +181,15 @@ export function simulatePortfolio(candidates, options = {}) {
           targetBalance,
           accountBalance
         });
-      } else {
+      } else if (batchNetPnl > 0) {
         lossStreak = 0;
         capitalEvents.push({
-          time: item.trade.exitTime,
-          symbol: item.candidate.symbol,
-          type: "trade_closed",
-          netPnl: item.trade.netPnl,
+          time: exitTime,
+          symbols: batch.filter(item => item.trade.status === "closed" && Number.isFinite(item.trade.netPnl))
+            .map(item => item.candidate.symbol),
+          type: "trade_settlement_batch",
+          batchNetPnl,
+          ambiguousTradesExcluded: batchHasAmbiguous,
           lossStreak
         });
       }

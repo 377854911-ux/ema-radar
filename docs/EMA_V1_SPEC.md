@@ -94,7 +94,7 @@ Backtest must avoid look-ahead bias. Signal-close entry must be modeled as execu
 - A hard stop is mandatory and cannot be disabled.
 - Hard-stop percentage is user-configurable from 1% through 20%, in 1% increments; integer values only, no decimals.
 - Long hard stop is below actual entry by the configured percentage; short hard stop is above actual entry by the configured percentage.
-- User chooses one auxiliary stop combination:
+- User chooses exactly one auxiliary stop combination (not both simultaneously):
   1. Hard stop plus signal-candle low (long) / high (short).
   2. Hard stop plus signal-candle open.
 - Whichever active stop level is reached first exits the trade.
@@ -180,7 +180,6 @@ Trading costs:
 ## 14. Items requiring user confirmation before backtest implementation
 
 
-2. For the auxiliary stop, confirm whether the user selects either option 1 or option 2 (not both simultaneously).
 3. For a same-symbol opposite-direction signal while a position is open: wait until all positions close, then open only if a new fresh signal appears; never reuse an expired signal.
 
 No implementation should silently invent answers to these unresolved items.

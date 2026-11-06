@@ -24,6 +24,13 @@ function longCandles(symbolOffset = 0) {
   ];
 }
 
+test("portfolio rejects a configured capacity above five positions", () => {
+  assert.throws(
+    () => simulatePortfolio([], { maxOpenTrades: 6 }),
+    /maxOpenTrades must be an integer from 1 to 5/
+  );
+});
+
 test("same symbol and signal close keeps only shortest timeframe", () => {
   const candles = longCandles();
   const result = simulatePortfolio([

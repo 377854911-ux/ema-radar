@@ -242,10 +242,13 @@ export async function fetchKlinesRange({
 }
 
 export async function fetchCurrentUsdtPerpetualSymbols(fetchImpl = fetch) {
-  const info = await requestJSON(`${API}/fapi/v1/exchangeInfo`, fetchImpl);
-  return (info.symbols || []).filter(s =>
+  const info = await requestJSONWithRetry(`${API}/fapi/v1/exchangeInfo`, fetchImpl);
+  if (!info || !Array.isArray(info.symbols)) {
+    throw new Error("Binance returned an invalid exchangeInfo response");
+  }
+  return info.symbols.filter(s =>
     s.status === "TRADING" && s.contractType === "PERPETUAL"
-    && s.quoteAsset === "USDT" && s.symbol.endsWith("USDT")
+    && s.quoteAsset === "USDT" && typeof s.symbol === "string" && s.symbol.endsWith("USDT")
     && (!s.contractStatus || s.contractStatus === "TRADING")
   ).map(s => s.symbol);
 }

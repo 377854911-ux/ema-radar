@@ -363,3 +363,46 @@ test("same symbol and signal time with conflicting long and short directions rej
     assert.equal(result.skipped.every(item => item.reason === "conflicting_directions_same_signal_time"), true);
   }
 });
+
+
+test("funding paid by an existing open position reduces cash before a later entry is approved", () => {
+  const firstCandles = [
+    { openTime: 0, closeTime: 9, open: 98, high: 101, low: 97, close: 100 },
+    { openTime: 10, closeTime: 19, open: 100, high: 101, low: 99, close: 100 },
+    { openTime: 20, closeTime: 29, open: 100, high: 101, low: 99, close: 100 },
+    { openTime: 30, closeTime: 39, open: 100, high: 101, low: 99, close: 100 }
+  ];
+  const secondCandles = [
+    { openTime: 0, closeTime: 9, open: 98, high: 101, low: 97, close: 100 },
+    { openTime: 10, closeTime: 19, open: 98, high: 101, low: 97, close: 100 },
+    { openTime: 20, closeTime: 29, open: 100, high: 101, low: 99, close: 100 },
+    { openTime: 30, closeTime: 39, open: 100, high: 101, low: 99, close: 100 }
+  ];
+  const result = simulatePortfolio([
+    {
+      symbol: "FIRST_OPENUSDT", timeframe: "1h", direction: "LONG",
+      distanceRate: 0.1, candles: firstCandles, signalIndex: 0,
+      config: { ...config, positionNotional: 700 },
+      fundingEvents: [{ fundingTime: 15, rate: 0.02, markPrice: 100 }]
+    },
+    {
+      symbol: "SECOND_ENTRYUSDT", timeframe: "1h", direction: "LONG",
+      distanceRate: 0.1, candles: secondCandles, signalIndex: 1,
+      config: { ...config, positionNotional: 300 }
+    }
+  ], { initialCapital: 1_000 });
+
+  assert.equal(result.accepted.length, 1);
+  assert.equal(result.accepted[0].symbol, "FIRST_OPENUSDT");
+  assert.equal(result.accepted[0].fundingPnl, -14);
+  assert.equal(result.skipped.some(item =>
+    item.candidate.symbol === "SECOND_ENTRYUSDT"
+      && item.reason === "insufficient_available_balance"
+  ), true);
+  assert.equal(result.capital.accountBalance, 986);
+  assert.equal(result.capital.usedCapital, 700);
+  assert.equal(result.capital.availableBalance, 286);
+  assert.equal(result.capital.events.filter(event =>
+    event.type === "open_position_funding"
+  ).length, 1);
+});

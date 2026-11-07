@@ -85,7 +85,7 @@ $('start').onclick=async()=>{
      checked+=outcome.checked;
      const sim=window.emaSimulate(all,matches,config);
      for(const k of Object.keys(excluded))excluded[k]+=sim.excluded[k]||0;
-     for(const t of sim.trades){allTrades.push(t);addTrade(t)}
+     for(const t of sim.trades)allTrades.push(t)
     }catch(e){if(aborter.signal.aborted)throw e;failed.push(sym+': '+e.message)}
     done++;
     $('status').textContent='历史K线与撮合 '+done+'/'+ranked.symbols.length+' ｜ 信号 '+signalCount+' ｜ 已平仓 '+allTrades.length+' ｜ 失败 '+failed.length;
@@ -94,13 +94,13 @@ $('start').onclick=async()=>{
    if(failed.length){
     $('status').textContent='扫描未完整：'+failed.length+' 个交易对失败（例如 '+failed.slice(0,3).join('；')+'）。不得将结果当作完整市场回测。';
    }else $('status').textContent='历史逐币种扫描完成：'+done+' 个交易对，'+checked+' 根候选K线，'+signalCount+' 个信号，'+allTrades.length+' 笔已平仓交易。';
-   if(!allTrades.length)root.textContent='没有符合条件的已平仓交易。';
-   const wins=allTrades.filter(t=>t.pnl>0),losses=allTrades.filter(t=>t.pnl<0);
-   const profit=wins.reduce((n,t)=>n+t.pnl,0),loss=-losses.reduce((n,t)=>n+t.pnl,0);
-   const ratio=wins.length&&losses.length?(profit/wins.length)/(loss/losses.length):null;
-   $('actualRR').textContent='实际平均盈亏比：'+(ratio===null?'暂无足够盈亏样本':'1:'+ratio.toFixed(2));
-   $('summary').textContent='已平仓 '+allTrades.length+' 笔 ｜ 胜率 '+(allTrades.length?100*wins.length/allTrades.length:0).toFixed(2)+'% ｜ 总盈利 '+money(profit)+' USDT ｜ 总亏损 '+money(loss)+' USDT ｜ 净盈亏 '+money(profit-loss)+' USDT ｜ 同根双触及排除 '+excluded.ambiguous+' 笔 ｜ 重叠排除 '+excluded.overlap+' 笔。仅为逐币种模拟汇总，不包含资金费率、跨币种资金占用与全市场组合回撤'+(failed.length?'；存在数据失败，不完整':'')+'。';
-   $('results').textContent='历史每日前100过滤后识别 '+signalCount+' 个信号；详细已平仓记录见上方。';
+   const portfolio=window.emaPortfolio(allTrades,config);
+   const st=portfolio.stats;
+   for(const t of [...portfolio.trades].sort((a,b)=>a.entryTime-b.entryTime))addTrade(t);
+   if(!portfolio.trades.length)root.textContent='没有符合资金及持仓限制的已平仓交易。';
+   $('actualRR').textContent='实际平均盈亏比：'+(st.realizedRR===null?'暂无足够盈亏样本':'1:'+st.realizedRR.toFixed(2));
+   $('summary').textContent='组合已平仓 '+st.count+' 笔 ｜ 胜率 '+st.winRate.toFixed(2)+'% ｜ 总盈利 '+money(st.profit)+' USDT ｜ 总亏损 '+money(st.loss)+' USDT ｜ 净盈亏 '+money(st.net)+' USDT ｜ 期末资金 '+money(st.equity)+' USDT ｜ 收益率 '+st.returnPct.toFixed(2)+'% ｜ 已实现最大回撤 '+money(st.maxDrawdown)+' USDT ('+st.maxDrawdownPct.toFixed(2)+'%) ｜ 同币种冲突排除 '+portfolio.excluded.sameSymbol+' ｜ 持仓上限排除 '+portfolio.excluded.capacity+' ｜ 保证金不足排除 '+portfolio.excluded.margin+' ｜ 同根双触及排除 '+excluded.ambiguous+'。尚未计入资金费率及未实现浮动盈亏，回撤为已实现回撤，不是完整账户回撤'+(failed.length?'；数据获取不完整':'')+'。';
+   $('results').textContent='历史每日前100过滤后识别 '+signalCount+' 个信号；组合成交 '+st.count+' 笔。详细记录见上方。';
    return;
   }
   const info=await json(api+'/fapi/v1/exchangeInfo',aborter.signal);

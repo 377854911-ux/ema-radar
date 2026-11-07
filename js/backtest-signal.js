@@ -65,7 +65,6 @@ $('start').onclick=async()=>{
    let done=0,failed=[],signalCount=0,checked=0;
    const cutoff=Math.floor(Date.now()/86400000)*86400000;
    const begin=cutoff-days*86400000;
-   if(config.positionMode==='martingale')$('summary').textContent+=' ｜ '+portfolio.slots.map(x=>x.id+'仓 '+x.increments+'/10'+(x.paused?'【暂停，需人工调整参数】':'')).join(' · ');
   const root=$('tradeResults');root.replaceChildren();
    const money=n=>Number(n).toFixed(2);
    const addTrade=t=>{

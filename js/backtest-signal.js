@@ -68,6 +68,7 @@ $('start').onclick=async()=>{
   try{
    const sim=window.emaSimulate(all,rows,config);
    const st=sim.stats;
+   $('actualRR').textContent='实际平均盈亏比：'+(st.realizedRR===null?'暂无足够盈利及亏损样本':'1:'+st.realizedRR.toFixed(2));
    const money=n=>Number(n).toFixed(2);
    $('summary').textContent='已平仓 '+st.count+' 笔 ｜ 胜率 '+st.winRate.toFixed(2)+'% ｜ 总盈利 '+money(st.profit)+' USDT ｜ 总亏损 '+money(st.loss)+' USDT ｜ 净盈亏 '+money(st.net)+' USDT ｜ 实际平均盈亏比 '+(st.realizedRR===null?'暂无':st.realizedRR.toFixed(2))+' ｜ 收益率 '+st.returnPct.toFixed(2)+'% ｜ 最大回撤 '+money(st.maxDrawdown)+' USDT ('+st.maxDrawdownPct.toFixed(2)+'%) ｜ 同根止盈止损排除 '+sim.excluded.ambiguous+' 笔 ｜ 重叠信号排除 '+sim.excluded.overlap+' 笔 ｜ 未平仓/数据不足 '+sim.excluded.unfinished+' 笔。资金费率未计入；非完整回测。';
    const tradeMap=new Map(sim.trades.map(t=>[t.entryTime,t]));
@@ -79,9 +80,11 @@ $('start').onclick=async()=>{
     if(t)detail.textContent+=' ｜ '+(t.exitType==='target'?'止盈':t.exitType==='stop'?'止损':'到期平仓')+' ｜ 净盈亏 '+money(t.pnl)+' USDT';
     else detail.textContent+=' ｜ 未计入模拟交易';
    }
-  }catch(e){$('summary').textContent='盈亏模拟未执行：'+e.message+'。请在回测设置中关闭资金费率，并选择下一根开盘价入场。';}
+  }catch(e){$('actualRR').textContent='实际平均盈亏比：未计算';$('summary').textContent='盈亏模拟未执行：'+e.message+'。请在回测设置中关闭资金费率，并选择下一根开盘价入场。';}
  }catch(e){$('status').textContent=e.name==='AbortError'?'扫描已停止':'扫描失败：'+e.message}
  finally{aborter=null;$('start').disabled=false}
 };
 const s=settings();if([7,30,60].includes(Number(s.days)))$('days').value=String(s.days);
 if(Array.isArray(s.timeframes)&&s.timeframes.includes('30m'))$('tf').value='30m';
+
+$('rrDisplay').textContent='目标盈亏比：1:'+(Number(settings().rr??1).toFixed(2));

@@ -159,11 +159,13 @@ $('start').onclick=async()=>{
  finally{aborter=null;$('start').disabled=false}
 };
 const s=settings();if([7,30,60].includes(Number(s.days)))$('days').value=String(s.days);
+if([...$('rr').options].some(o=>Number(o.value)===Number(s.rr??1)))$('rr').value=String(Number(s.rr??1));
+$('rr').addEventListener('change',()=>{const next=settings();next.rr=Number($('rr').value);localStorage.setItem('ema.settings.backtest',JSON.stringify(next));$('rrDisplay').textContent='盈亏比：1:'+next.rr.toFixed(2)});
 const savedTfs=Array.isArray(s.timeframes)?s.timeframes:['30m'];
 for(const el of document.querySelectorAll('input[name="tf"]'))el.checked=savedTfs.includes(el.value);
 for(const el of document.querySelectorAll('input[name="tf"]'))el.addEventListener('change',()=>{const next=settings();next.timeframes=[...document.querySelectorAll('input[name="tf"]:checked')].map(x=>x.value);localStorage.setItem('ema.settings.backtest',JSON.stringify(next))});
 
-$('rrDisplay').textContent='目标盈亏比：1:'+(Number(settings().rr??1).toFixed(2));
+$('rrDisplay').textContent='盈亏比：1:'+(Number(settings().rr??1).toFixed(2));
 
-$('scope').addEventListener('change',()=>{$('symbolField').style.display=$('scope').value==='single'?'block':'none';$('start').textContent=$('scope').value==='single'?'开始历史信号扫描':'开始历史排名核验';});
+$('scope').addEventListener('change',()=>{$('symbolField').style.display=$('scope').value==='single'?'flex':'none';$('start').textContent='开始回测';});
 $('scope').dispatchEvent(new Event('change'));

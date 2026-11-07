@@ -55,8 +55,8 @@ $('start').onclick=async()=>{
    $('status').textContent='正在核验历史每日成交额排名…';
    const ranked=await window.emaHistoricalUniverse(days,Number(settings().topN??100),aborter.signal,p=>{$('status').textContent='历史排名：'+p.completed+'/'+p.total+' 个交易对，失败 '+p.failed});
    const config=settings();
-   if(config.entryMode==='offset'||(config.funding!==false&&config.feeOnly===false)){
-    throw Error('全市场模拟暂不支持限价偏移或资金费率；请在设置中选择下一根开盘入场并启用仅试算');
+   if((config.funding!==false&&config.feeOnly===false)){
+    throw Error('全市场模拟暂不支持资金费率；请在设置中启用仅试算');
    }
    config.funding=false;
    const allTrades=[], excluded={ambiguous:0,overlap:0,invalid:0,unfinished:0};

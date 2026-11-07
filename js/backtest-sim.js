@@ -13,6 +13,8 @@ window.emaSimulate=function(raw,signals,opts){
   const entry=Number(raw[idx][1]),long=s.side==='多头';
   if(!Number.isFinite(entry)||entry<=0){excluded.invalid++;continue}
   const signalIndex=idx-1;
+  const interval={'15m':900000,'30m':1800000,'1h':3600000,'2h':7200000,'4h':14400000,'6h':21600000,'8h':28800000,'12h':43200000,'1d':86400000}[s.tf];
+  if(!interval){excluded.invalid++;continue}
   if(signalIndex<0||Number(raw[signalIndex][0])!==s.signalTime){excluded.invalid++;continue}
   const candle=raw[signalIndex],hard=long?entry*(1-cfg.hardStop):entry*(1+cfg.hardStop);
   const structural=cfg.stopMode==='hard_extreme'?(long?Number(candle[3]):Number(candle[2])):Number(candle[1]);
@@ -27,7 +29,7 @@ window.emaSimulate=function(raw,signals,opts){
   for(let j=idx;j<=last;j++){
    const c=raw[j],o=Number(c[1]),h=Number(c[2]),l=Number(c[3]),cl=Number(c[4]),closeTime=Number(c[6]);
    if(closeTime>=Date.now()){break}
-   if(j>idx&&Number(raw[j][0])<=Number(raw[j-1][0]))break
+   if(j>idx&&Number(raw[j][0])-Number(raw[j-1][0])!==interval)break
    if(![o,h,l,cl].every(Number.isFinite)){break}
    const hitStop=long?l<=stop:h>=stop,hitTarget=long?h>=target:l<=target;
    if(hitStop&&hitTarget){outcome={type:'ambiguous',j};break}

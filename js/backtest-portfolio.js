@@ -21,5 +21,5 @@ window.emaPortfolio=function(candidates,opts){
  for(const t of [...active].sort((a,b)=>a.exitTime-b.exitTime)){realized+=t.pnl;update()}
  const wins=accepted.filter(t=>t.pnl>0),losses=accepted.filter(t=>t.pnl<0);
  const profit=wins.reduce((a,t)=>a+t.pnl,0),loss=-losses.reduce((a,t)=>a+t.pnl,0);
- return {trades:accepted,excluded,stats:{count:accepted.length,wins:wins.length,losses:losses.length,winRate:accepted.length?100*wins.length/accepted.length:0,profit,loss,net:profit-loss,equity:initial+profit-loss,returnPct:100*(profit-loss)/initial,realizedRR:wins.length&&losses.length?(profit/wins.length)/(loss/losses.length):null,maxDrawdown,maxDrawdownPct}};
+ return {trades:accepted,excluded,stats:{count:accepted.length,wins:wins.length,losses:losses.length,winRate:accepted.length?100*wins.length/accepted.length:0,profit,loss,net:profit-loss,equity:initial+profit-loss,returnPct:100*(profit-loss)/initial,realizedRR:wins.length&&losses.length?(profit/wins.length)/(loss/losses.length):null,maxDrawdown:maxDD,maxDrawdownPct:maxDDPct}};
 };

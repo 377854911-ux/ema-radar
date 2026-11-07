@@ -1,4 +1,6 @@
 'use strict';
+function updateBacktestStats(st){const money=n=>Number(n).toFixed(2);$('tradeCount').textContent=String(st.count);$('winRate').textContent=money(st.winRate)+'%';$('grossProfit').textContent=money(st.profit)+' USDT';$('grossLoss').textContent=money(st.loss)+' USDT';$('netProfit').textContent=money(st.net)+' USDT';$('returnPct').textContent=money(st.returnPct)+'%';}
+function resetBacktestStats(){for(const id of ['tradeCount','winRate','grossProfit','grossLoss','netProfit','returnPct'])$(id).textContent='—';}
 const $=id=>document.getElementById(id);
 const ms={ '15m':900000,'30m':1800000,'1h':3600000,'2h':7200000,'4h':14400000,'6h':21600000,'8h':28800000,'12h':43200000,'1d':86400000 };
 let aborter=null;
@@ -47,7 +49,7 @@ $('start').onclick=async()=>{
  const symbol=$('symbol').value.trim().toUpperCase(),tfs=[...document.querySelectorAll('input[name="tf"]:checked')].map(x=>x.value),days=Number($('days').value);
  if(!tfs.length){$('status').textContent='请至少选择一个扫描周期';return}
  if(!/^[A-Z0-9]{3,30}USDT$/.test(symbol)){ $('status').textContent='请输入有效的USDT合约交易对，例如 BTCUSDT';return}
- aborter=new AbortController();$('start').disabled=true;$('tradeResults').textContent='正在扫描，尚未生成已平仓交易';$('summary').textContent='等待扫描完成后模拟撮合';$('results').replaceChildren();$('count').textContent='0';
+ aborter=new AbortController();$('start').disabled=true;$('tradeResults').textContent='正在扫描，尚未生成已平仓交易';resetBacktestStats();$('summary').textContent='正在回测，统计结果将在完成后显示';$('results').replaceChildren();$('count').textContent='0';
  try{
   if($('scope').value==='market'){
    $('status').textContent='正在核验历史每日成交额排名…';
@@ -102,6 +104,7 @@ $('start').onclick=async()=>{
    }else $('status').textContent='历史逐币种扫描完成：'+done+' 个交易对，'+checked+' 根候选K线，'+signalCount+' 个信号，'+allTrades.length+' 笔已平仓交易。';
    const portfolio=window.emaPortfolio(allTrades,config);
    const st=portfolio.stats;
+   updateBacktestStats(st);
    for(const t of [...portfolio.trades].sort((a,b)=>a.entryTime-b.entryTime))addTrade(t);
    if(!portfolio.trades.length)root.textContent='没有符合资金及持仓限制的已平仓交易。';
    $('actualRR').textContent='实际平均盈亏比：'+(st.realizedRR===null?'暂无足够盈亏样本':'1:'+st.realizedRR.toFixed(2));
@@ -140,6 +143,7 @@ $('start').onclick=async()=>{
   }
   const portfolio=window.emaPortfolio(allTrades,{...config,maxPositions:1e6});
   const st=portfolio.stats,money=n=>Number(n).toFixed(2);
+  updateBacktestStats(st);
   $('actualRR').textContent='实际平均盈亏比：'+(st.realizedRR===null?'暂无足够盈亏样本':'1:'+st.realizedRR.toFixed(2));
   $('summary').textContent='多周期组合已平仓 '+st.count+' 笔 ｜ 胜率 '+st.winRate.toFixed(2)+'% ｜ 总盈利 '+money(st.profit)+' USDT ｜ 总亏损 '+money(st.loss)+' USDT ｜ 净盈亏 '+money(st.net)+' USDT ｜ 收益率 '+st.returnPct.toFixed(2)+'% ｜ 同币种重叠排除 '+portfolio.excluded.sameSymbol+' ｜ 资金费率未计入；当前为试算。'+(failed.length?' 失败周期：'+failed.join('；'):'');
   const root=$('tradeResults');root.replaceChildren();

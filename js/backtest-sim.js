@@ -16,7 +16,23 @@ window.emaSimulate=function(raw,signals,opts){
   const interval={'15m':900000,'30m':1800000,'1h':3600000,'2h':7200000,'4h':14400000,'6h':21600000,'8h':28800000,'12h':43200000,'1d':86400000}[s.tf];
   if(!interval){excluded.invalid++;continue}
   if(signalIndex<0||Number(raw[signalIndex][0])!==s.signalTime){excluded.invalid++;continue}
-  const candle=raw[signalIndex],hard=long?entry*(1-cfg.hardStop):entry*(1+cfg.hardStop);
+  // Independently validate the signal candle and the EMA snapshot before any fill.
+  // Strict inequalities exclude an EMA merely touching the body boundary.
+  const candle=raw[signalIndex];
+  const open=Number(candle[1]),close=Number(candle[4]);
+  const lines=Array.isArray(s.ema)?s.ema.map(Number):[];
+  const validLines=lines.length===3&&lines.every(Number.isFinite);
+  const inside=validLines&&lines.every(v=>v>Math.min(open,close)&&v<Math.max(open,close));
+  const ordered=validLines&&(long
+    ? lines[2]<lines[0]&&lines[2]<lines[1]
+    : lines[2]>lines[0]&&lines[2]>lines[1]);
+  const direction=long?close>open:close<open;
+  const validNext=Number(raw[idx][0])===Number(candle[0])+interval;
+  const validClose=Number(candle[6])<Number(raw[idx][0]);
+  if(!Number.isFinite(open)||!Number.isFinite(close)||!direction||!inside||!ordered||!validNext||!validClose){
+   excluded.invalid++;continue;
+  }
+  const hard=long?entry*(1-cfg.hardStop):entry*(1+cfg.hardStop);
   const structural=cfg.stopMode==='hard_extreme'?(long?Number(candle[3]):Number(candle[2])):Number(candle[1]);
   const stop=long?Math.max(hard,structural):Math.min(hard,structural);
   const risk=Math.abs(entry-stop);

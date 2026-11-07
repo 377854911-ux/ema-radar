@@ -65,7 +65,7 @@ $('start').onclick=async()=>{
   $('status').textContent='历史信号识别完成：'+stats.checked+' 根候选K线，'+stats.found+' 个信号，'+stats.skipped+' 根缺少连续下一根K线。信号识别已完成；模拟交易统计见上方，未进行历史每日前100筛选。';
   if(!rows.length)$('results').textContent='该交易对和周期在所选时间内没有符合条件的信号。';
   const config=settings();
-  const feeOnly=$('feeOnly').checked;
+  const feeOnly=config.feeOnly!==false;
   if(feeOnly)config.funding=false;
   try{
    const sim=window.emaSimulate(all,rows,config);

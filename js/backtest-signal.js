@@ -46,7 +46,7 @@ $('start').onclick=async()=>{
  if(aborter)return;
  const symbol=$('symbol').value.trim().toUpperCase(),tf=$('tf').value,days=Number($('days').value);
  if(!/^[A-Z0-9]{3,30}USDT$/.test(symbol)){ $('status').textContent='请输入有效的USDT合约交易对，例如 BTCUSDT';return}
- aborter=new AbortController();$('start').disabled=true;$('summary').textContent='等待扫描完成后模拟撮合';$('results').replaceChildren();$('count').textContent='0';
+ aborter=new AbortController();$('start').disabled=true;$('tradeResults').textContent='正在扫描，尚未生成已平仓交易';$('summary').textContent='等待扫描完成后模拟撮合';$('results').replaceChildren();$('count').textContent='0';
  try{
   const info=await json(api+'/fapi/v1/exchangeInfo',aborter.signal);
   const contract=info.symbols.find(x=>x.symbol===symbol&&x.contractType==='PERPETUAL'&&x.quoteAsset==='USDT');
@@ -71,6 +71,16 @@ $('start').onclick=async()=>{
    $('actualRR').textContent='实际平均盈亏比：'+(st.realizedRR===null?'暂无足够盈利及亏损样本':'1:'+st.realizedRR.toFixed(2));
    const money=n=>Number(n).toFixed(2);
    $('summary').textContent='已平仓 '+st.count+' 笔 ｜ 胜率 '+st.winRate.toFixed(2)+'% ｜ 总盈利 '+money(st.profit)+' USDT ｜ 总亏损 '+money(st.loss)+' USDT ｜ 净盈亏 '+money(st.net)+' USDT ｜ 实际平均盈亏比 '+(st.realizedRR===null?'暂无':st.realizedRR.toFixed(2))+' ｜ 收益率 '+st.returnPct.toFixed(2)+'% ｜ 最大回撤 '+money(st.maxDrawdown)+' USDT ('+st.maxDrawdownPct.toFixed(2)+'%) ｜ 同根止盈止损排除 '+sim.excluded.ambiguous+' 笔 ｜ 重叠信号排除 '+sim.excluded.overlap+' 笔 ｜ 未平仓/数据不足 '+sim.excluded.unfinished+' 笔。资金费率未计入；非完整回测。';
+   const tradeRoot=$('tradeResults');tradeRoot.replaceChildren();
+   if(!sim.trades.length)tradeRoot.textContent='没有符合条件的已平仓交易，实际盈亏比不可计算。';
+   for(const t of [...sim.trades].reverse()){
+    const card=document.createElement('div');card.className='panel';
+    const title=document.createElement('strong');title.style.color=t.pnl>=0?'#ff656d':'#48d69a';
+    title.textContent=t.symbol+' · '+t.tf+' · '+t.side+' · '+(t.pnl>=0?'盈利 ':'亏损 ')+money(t.pnl)+' USDT';
+    const details=document.createElement('p');details.className='muted';
+    details.textContent='开仓 '+fmt(t.entryTime)+' ｜ 入场 '+t.entry.toFixed(4)+' ｜ 止损 '+t.stop.toFixed(4)+' ｜ 止盈 '+t.target.toFixed(4)+' ｜ 平仓 '+t.exit.toFixed(4)+' ｜ 手续费 '+money(t.fee)+' USDT';
+    card.append(title,details);tradeRoot.append(card);
+   }
    const tradeMap=new Map(sim.trades.map(t=>[t.entryTime,t]));
    for(const el of $('results').children){
     const detail=el.querySelector('p');if(!detail)continue;
@@ -80,7 +90,7 @@ $('start').onclick=async()=>{
     if(t)detail.textContent+=' ｜ '+(t.exitType==='target'?'止盈':t.exitType==='stop'?'止损':'到期平仓')+' ｜ 净盈亏 '+money(t.pnl)+' USDT';
     else detail.textContent+=' ｜ 未计入模拟交易';
    }
-  }catch(e){$('actualRR').textContent='实际平均盈亏比：未计算';$('summary').textContent='盈亏模拟未执行：'+e.message+'。请在回测设置中关闭资金费率，并选择下一根开盘价入场。';}
+  }catch(e){$('tradeResults').textContent='交易盈亏未计算：'+e.message;$('actualRR').textContent='实际平均盈亏比：未计算';$('summary').textContent='盈亏模拟未执行：'+e.message+'。请在回测设置中关闭资金费率，并选择下一根开盘价入场。';}
  }catch(e){$('status').textContent=e.name==='AbortError'?'扫描已停止':'扫描失败：'+e.message}
  finally{aborter=null;$('start').disabled=false}
 };

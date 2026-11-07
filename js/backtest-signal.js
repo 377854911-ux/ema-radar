@@ -22,6 +22,8 @@ async function klines(symbol,tf,days,signal,onPage){
  }
  return {all,start,end};
 }
+function progress(done,total,label){const pct=total?Math.min(100,Math.round(done/total*100)):0;const bar=$('btProgress');if(bar){bar.hidden=false;$('btProgressFill').style.width=pct+'%';$('btProgressFill').setAttribute('aria-valuenow',String(pct));$('btProgressText').textContent=label+' '+done+'/'+total+' · '+pct+'%';}}
+function renderLive(trades,config,root,partial=true){const p=window.emaPortfolio(trades,config),st=p.stats;updateBacktestStats(st);const money=n=>Number(n).toFixed(2);$('summary').textContent=(partial?'扫描中 · 临时统计 ｜ ':'')+'已平仓 '+st.count+' 笔 ｜ 净盈亏 '+money(st.net)+' USDT ｜ 收益率 '+money(st.returnPct)+'%';$('actualRR').textContent='实际平均盈亏比：'+(st.realizedRR===null?'暂无足够盈亏样本':'1:'+st.realizedRR.toFixed(2));root.replaceChildren();for(const t of [...p.trades].sort((a,b)=>b.entryTime-a.entryTime)){const card=document.createElement('div');card.className='panel';const title=document.createElement('strong');title.style.color=t.pnl>=0?'#ff656d':'#48d69a';title.textContent=t.symbol+' · '+t.tf+' · '+t.side+' · '+(t.pnl>=0?'盈利 ':'亏损 ')+money(t.pnl)+' USDT';const detail=document.createElement('p');detail.className='muted';detail.textContent='开仓 '+fmt(t.entryTime)+' ｜ 入场 '+Number(t.entry).toFixed(4)+' ｜ 平仓 '+fmt(t.exitTime)+' ｜ 平仓价 '+Number(t.exit).toFixed(4)+' ｜ 手续费 '+money(t.fee)+' USDT';card.append(title,detail);root.append(card)}if(!p.trades.length)root.textContent='尚无符合持仓限制的已平仓交易';return p;}
 function analyze(raw,start,end,tf,onMatch,symbol=$('symbol').value.trim().toUpperCase()){
  const periods=[25,50,100],alpha=periods.map(p=>2/(p+1)),ema=[null,null,null];
  const seed=periods.map(()=>[]);let found=0,checked=0,skipped=0;
@@ -49,11 +51,11 @@ $('start').onclick=async()=>{
  const symbol=$('symbol').value.trim().toUpperCase(),tfs=[...document.querySelectorAll('input[name="tf"]:checked')].map(x=>x.value),days=Number($('days').value);
  if(!tfs.length){$('status').textContent='请至少选择一个扫描周期';return}
  if(!/^[A-Z0-9]{3,30}USDT$/.test(symbol)){ $('status').textContent='请输入有效的USDT合约交易对，例如 BTCUSDT';return}
- aborter=new AbortController();$('start').disabled=true;$('tradeResults').textContent='正在扫描，尚未生成已平仓交易';resetBacktestStats();$('summary').textContent='正在回测，统计结果将在完成后显示';$('results').replaceChildren();$('count').textContent='0';
+ aborter=new AbortController();$('start').disabled=true;$('tradeResults').textContent='正在扫描，尚未生成已平仓交易';resetBacktestStats();progress(0,1,'准备扫描');$('summary').textContent='正在回测 · 临时统计';$('results').replaceChildren();$('count').textContent='0';
  try{
   if($('scope').value==='market'){
    $('status').textContent='正在核验历史每日成交额排名…';
-   const ranked=await window.emaHistoricalUniverse(days,Number(settings().topN??100),aborter.signal,p=>{$('status').textContent='历史排名：'+p.completed+'/'+p.total+' 个交易对，失败 '+p.failed});
+   const ranked=await window.emaHistoricalUniverse(days,Number(settings().topN??100),aborter.signal,p=>{$('status').textContent='历史排名：'+p.completed+'/'+p.total+' 个交易对，失败 '+p.failed;progress(p.completed,p.total,'历史排名')});
    const config=settings();
    if((config.funding!==false&&config.feeOnly===false)){
     throw Error('全市场模拟暂不支持资金费率；请在设置中启用仅试算');
@@ -92,10 +94,11 @@ $('start').onclick=async()=>{
        const sim=window.emaSimulate(all,matches,config);
        for(const k of Object.keys(excluded))excluded[k]+=sim.excluded[k]||0;
        allTrades.push(...sim.trades);
+       renderLive(allTrades,config,root);
       }catch(e){if(aborter.signal.aborted)throw e;failed.push(sym+' '+tf+': '+e.message)}
      }
     }catch(e){if(aborter.signal.aborted)throw e;failed.push(sym+': '+e.message)}
-    done++;
+    done++;progress(done,ranked.symbols.length,'交易对扫描');
     $('status').textContent='历史K线与撮合 '+done+'/'+ranked.symbols.length+' ｜ 信号 '+signalCount+' ｜ 已平仓 '+allTrades.length+' ｜ 失败 '+failed.length;
     if(done%10===0)await new Promise(resolve=>setTimeout(resolve,0));
    }
@@ -103,6 +106,7 @@ $('start').onclick=async()=>{
     $('status').textContent='扫描未完整：'+failed.length+' 个交易对失败（例如 '+failed.slice(0,3).join('；')+'）。不得将结果当作完整市场回测。';
    }else $('status').textContent='历史逐币种扫描完成：'+done+' 个交易对，'+checked+' 根候选K线，'+signalCount+' 个信号，'+allTrades.length+' 笔已平仓交易。';
    const portfolio=window.emaPortfolio(allTrades,config);
+   root.replaceChildren();
    const st=portfolio.stats;
    updateBacktestStats(st);
    for(const t of [...portfolio.trades].sort((a,b)=>a.entryTime-b.entryTime))addTrade(t);
@@ -119,7 +123,7 @@ $('start').onclick=async()=>{
   const config=settings();
   if(config.feeOnly!==false)config.funding=false;
   const allTrades=[],allRows=[],failed=[];
-  let checked=0,found=0,skipped=0;
+  let checked=0,found=0,skipped=0,completedTfs=0;
   for(const tf of tfs){
    if(aborter.signal.aborted)throw new DOMException('已取消','AbortError');
    $('status').textContent='正在扫描 '+symbol+' · '+tf;
@@ -139,7 +143,9 @@ $('start').onclick=async()=>{
     checked+=stats.checked;found+=stats.found;skipped+=stats.skipped;
     const sim=window.emaSimulate(all,rows,config);
     allTrades.push(...sim.trades);
+    renderLive(allTrades,{...config,maxPositions:1e6},$('tradeResults'));
    }catch(e){if(aborter.signal.aborted)throw e;failed.push(tf+': '+e.message)}
+   completedTfs++;progress(completedTfs,tfs.length,'周期扫描');
   }
   const portfolio=window.emaPortfolio(allTrades,{...config,maxPositions:1e6});
   const st=portfolio.stats,money=n=>Number(n).toFixed(2);

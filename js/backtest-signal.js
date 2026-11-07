@@ -54,7 +54,8 @@ $('start').onclick=async()=>{
   $('status').textContent='正在获取历史K线…';
   const {all,start,end}=await klines(symbol,tf,days,aborter.signal,(p,n)=>{$('status').textContent='已下载 '+n+' 根K线 · '+p+' 页'});
   if(all.length<401)throw Error('有效历史K线不足，不能计算EMA100');
-  const rows=[];\n  $('summary').textContent='正在计算模拟交易…';
+  const rows=[];
+  $('summary').textContent='正在计算模拟交易…';
   const stats=analyze(all,start,end,tf,x=>{
    rows.push(x);const el=document.createElement('div');el.className='panel';
    const heading=document.createElement('strong');heading.style.color=x.side==='多头'?'#ff656d':'#48d69a';heading.textContent=x.symbol+' · '+x.tf+' · '+x.side;

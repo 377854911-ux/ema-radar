@@ -11,6 +11,7 @@ window.emaSimulate=function(raw,signals,opts){
   const idx=byOpen.get(s.entryTime);if(idx===undefined){excluded.invalid++;continue}
   if(idx<=busyUntil){excluded.overlap++;continue}
   const entry=Number(raw[idx][1]),long=s.side==='多头';
+  if(!Number.isFinite(entry)||entry<=0){excluded.invalid++;continue}
   const signalIndex=idx-1;
   if(signalIndex<0||Number(raw[signalIndex][0])!==s.signalTime){excluded.invalid++;continue}
   const candle=raw[signalIndex],hard=long?entry*(1-cfg.hardStop):entry*(1+cfg.hardStop);
@@ -26,6 +27,7 @@ window.emaSimulate=function(raw,signals,opts){
   for(let j=idx;j<=last;j++){
    const c=raw[j],o=Number(c[1]),h=Number(c[2]),l=Number(c[3]),cl=Number(c[4]),closeTime=Number(c[6]);
    if(closeTime>=Date.now()){break}
+   if(j>idx&&Number(raw[j][0])<=Number(raw[j-1][0]))break
    if(![o,h,l,cl].every(Number.isFinite)){break}
    const hitStop=long?l<=stop:h>=stop,hitTarget=long?h>=target:l<=target;
    if(hitStop&&hitTarget){outcome={type:'ambiguous',j};break}
@@ -33,9 +35,9 @@ window.emaSimulate=function(raw,signals,opts){
    if(hitTarget){const price=long?Math.max(o,target):Math.min(o,target);outcome={type:'target',price,j};break}
    if(j===last){outcome={type:'timeout',price:cl,j};break}
   }
-  if(!outcome){excluded.unfinished++;continue}
-  // Ambiguous trades are not counted and do not reserve the position.
-  if(outcome.type==='ambiguous'){excluded.ambiguous++;continue}
+  if(!outcome){excluded.unfinished++;busyUntil=Math.max(busyUntil,last);continue}
+  // The ambiguous candle was reached by a real open position; reserve through that candle.
+  if(outcome.type==='ambiguous'){excluded.ambiguous++;busyUntil=outcome.j;continue}
   const gross=(long?1:-1)*(outcome.price-entry)*qty;
   const fee=entry*qty*cfg.entryFee+outcome.price*qty*(outcome.type==='stop'?cfg.slFee:cfg.tpFee);
   const pnl=gross-fee;
@@ -46,6 +48,6 @@ window.emaSimulate=function(raw,signals,opts){
  const profit=wins.reduce((a,t)=>a+t.pnl,0),loss=-losses.reduce((a,t)=>a+t.pnl,0);
  const chronological=[...trades].sort((a,b)=>a.exitTime-b.exitTime),equity=cfg.initialCapital+chronological.reduce((a,t)=>a+t.pnl,0);
  let peak=cfg.initialCapital,balance=peak,maxDrawdown=0,maxDrawdownPct=0;
- for(const t of chronological){balance+=t.pnl;peak=Math.max(peak,balance);const dd=peak-balance;if(dd>maxDrawdown){maxDrawdown=dd;maxDrawdownPct=peak>0?dd/peak*100:0}}
+ for(const t of chronological){balance+=t.pnl;peak=Math.max(peak,balance);const dd=peak-balance;if(dd>maxDrawdown)maxDrawdown=dd;const pct=peak>0?dd/peak*100:0;if(pct>maxDrawdownPct)maxDrawdownPct=pct}
  return {trades,excluded,stats:{count:trades.length,wins:wins.length,losses:losses.length,winRate:trades.length?wins.length/trades.length*100:0,profit,loss,net:profit-loss,equity,returnPct:(profit-loss)/cfg.initialCapital*100,profitFactor:loss>0?profit/loss:null,realizedRR:losses.length&&wins.length?(profit/wins.length)/(loss/losses.length):null,maxDrawdown,maxDrawdownPct}};
 };

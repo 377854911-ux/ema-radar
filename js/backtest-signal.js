@@ -23,7 +23,7 @@ async function klines(symbol,tf,days,signal,onPage){
  return {all,start,end};
 }
 function progress(done,total,label){const pct=total?Math.min(100,Math.round(done/total*100)):0;const bar=$('btProgress');if(bar){bar.hidden=false;$('btProgressFill').style.width=pct+'%';$('btProgressFill').setAttribute('aria-valuenow',String(pct));$('btProgressText').textContent=label+' '+done+'/'+total+' · '+pct+'%';}}
-function renderLive(trades,config,root,partial=true){const p=config.positionMode==='martingale'?window.emaMartingale(trades,config):window.emaPortfolio(trades,config),st=p.stats;updateBacktestStats(st);const money=n=>Number(n).toFixed(2);$('summary').textContent=(partial?'扫描中 · 临时统计 ｜ ':'')+'已平仓 '+st.count+' 笔 ｜ 净盈亏 '+money(st.net)+' USDT ｜ 收益率 '+money(st.returnPct)+'%';$('actualRR').textContent='实际平均盈亏比：'+(st.realizedRR===null?'暂无足够盈亏样本':'1:'+st.realizedRR.toFixed(2));root.replaceChildren();for(const t of [...p.trades].sort((a,b)=>b.entryTime-a.entryTime)){const card=document.createElement('div');card.className='panel';const title=document.createElement('strong');title.style.color=t.pnl>=0?'#ff656d':'#48d69a';title.textContent=(t.slot?t.slot+'仓 · ':'')+t.symbol+' · '+t.tf+' · '+t.side+' · '+(t.pnl>=0?'盈利 ':'亏损 ')+money(t.pnl)+' USDT';const detail=document.createElement('p');detail.className='muted';detail.textContent='开仓 '+fmt(t.entryTime)+' ｜ 入场 '+Number(t.entry).toFixed(4)+' ｜ 平仓 '+fmt(t.exitTime)+' ｜ 平仓价 '+Number(t.exit).toFixed(4)+' ｜ 手续费 '+money(t.fee)+' USDT';card.append(title,detail);root.append(card)}if(!p.trades.length)root.textContent='尚无符合持仓限制的已平仓交易';return p;}
+function renderLive(trades,config,root,partial=true){const p=config.positionMode==='martingale'?window.emaMartingale(trades,config):window.emaPortfolio(trades,config),st=p.stats;updateBacktestStats(st);const money=n=>Number(n).toFixed(2);$('summary').textContent=(partial?'扫描中 · 临时统计 ｜ ':'')+'已平仓 '+st.count+' 笔 ｜ 净盈亏 '+money(st.net)+' USDT ｜ 收益率 '+money(st.returnPct)+'%';$('actualRR').textContent='实际平均盈亏比：'+(st.realizedRR===null?'暂无足够盈亏样本':'1:'+st.realizedRR.toFixed(2));if(config.positionMode==='martingale')$('summary').textContent+=' ｜ '+p.slots.map(x=>x.id+'仓 '+x.increments+'/10'+(x.paused?'【暂停，请人工调整】':'')).join(' · ');root.replaceChildren();for(const t of [...p.trades].sort((a,b)=>b.entryTime-a.entryTime)){const card=document.createElement('div');card.className='panel';const title=document.createElement('strong');title.style.color=t.pnl>=0?'#ff656d':'#48d69a';title.textContent=(t.slot?t.slot+'仓 · ':'')+t.symbol+' · '+t.tf+' · '+t.side+' · '+(t.pnl>=0?'盈利 ':'亏损 ')+money(t.pnl)+' USDT';const detail=document.createElement('p');detail.className='muted';detail.textContent='开仓 '+fmt(t.entryTime)+' ｜ 入场 '+Number(t.entry).toFixed(4)+' ｜ 平仓 '+fmt(t.exitTime)+' ｜ 平仓价 '+Number(t.exit).toFixed(4)+' ｜ 手续费 '+money(t.fee)+' USDT';card.append(title,detail);root.append(card)}if(!p.trades.length)root.textContent='尚无符合持仓限制的已平仓交易';return p;}
 function analyze(raw,start,end,tf,onMatch,symbol=$('symbol').value.trim().toUpperCase()){
  const periods=[25,50,100],alpha=periods.map(p=>2/(p+1)),ema=[null,null,null];
  const seed=periods.map(()=>[]);let found=0,checked=0,skipped=0;
@@ -65,7 +65,8 @@ $('start').onclick=async()=>{
    let done=0,failed=[],signalCount=0,checked=0;
    const cutoff=Math.floor(Date.now()/86400000)*86400000;
    const begin=cutoff-days*86400000;
-   const root=$('tradeResults');root.replaceChildren();
+   if(config.positionMode==='martingale')$('summary').textContent+=' ｜ '+portfolio.slots.map(x=>x.id+'仓 '+x.increments+'/10'+(x.paused?'【暂停，需人工调整参数】':'')).join(' · ');
+  const root=$('tradeResults');root.replaceChildren();
    const money=n=>Number(n).toFixed(2);
    const addTrade=t=>{
     const card=document.createElement('div');card.className='panel';
@@ -114,6 +115,7 @@ $('start').onclick=async()=>{
    if(!portfolio.trades.length)root.textContent='没有符合仓位条件的已平仓交易。';
    $('actualRR').textContent='实际平均盈亏比：'+(st.realizedRR===null?'暂无足够盈亏样本':'1:'+st.realizedRR.toFixed(2));
    $('summary').textContent='组合已平仓 '+st.count+' 笔 ｜ 胜率 '+st.winRate.toFixed(2)+'% ｜ 总盈利 '+money(st.profit)+' USDT ｜ 总亏损 '+money(st.loss)+' USDT ｜ 净盈亏 '+money(st.net)+' USDT ｜ 期末资金 '+money(st.equity)+' USDT ｜ 收益率 '+st.returnPct.toFixed(2)+'% ｜ 已实现最大回撤 '+money(st.maxDrawdown)+' USDT ('+st.maxDrawdownPct.toFixed(2)+'%) ｜ 同币种冲突排除 '+portfolio.excluded.sameSymbol+' ｜ 持仓上限排除 '+portfolio.excluded.capacity+' ｜ 保证金不足排除 '+(portfolio.excluded.margin||0)+' ｜ 同根双触及排除 '+excluded.ambiguous+'。尚未计入资金费率及未实现浮动盈亏，回撤为已实现回撤，不是完整账户回撤'+(failed.length?'；数据获取不完整':'')+'。';
+   if(config.positionMode==='martingale')$('summary').textContent+=' ｜ '+portfolio.slots.map(x=>x.id+'仓 '+x.increments+'/10'+(x.paused?'【暂停，需人工调整参数】':'')).join(' · ');
    $('results').textContent='历史每日前100过滤后识别 '+signalCount+' 个信号；组合成交 '+st.count+' 笔。详细记录见上方。';
    return;
   }

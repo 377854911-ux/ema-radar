@@ -62,15 +62,17 @@ $('start').onclick=async()=>{
    const details=document.createElement('p');details.className='muted';details.textContent='信号K线 '+fmt(x.signalTime)+' ｜ 下一根开盘 '+fmt(x.entryTime)+' ｜ 开盘参考价 '+x.entry+' USDT';
    el.append(heading,details);$('results').prepend(el);$('count').textContent=String(rows.length);
   });
-  $('status').textContent='历史信号识别完成：'+stats.checked+' 根候选K线，'+stats.found+' 个信号，'+stats.skipped+' 根缺少连续下一根K线。仅用于核对信号，未进行历史每日前100筛选或交易撮合。';
+  $('status').textContent='历史信号识别完成：'+stats.checked+' 根候选K线，'+stats.found+' 个信号，'+stats.skipped+' 根缺少连续下一根K线。信号识别已完成；模拟交易统计见上方，未进行历史每日前100筛选。';
   if(!rows.length)$('results').textContent='该交易对和周期在所选时间内没有符合条件的信号。';
   const config=settings();
+  const feeOnly=$('feeOnly').checked;
+  if(feeOnly)config.funding=false;
   try{
    const sim=window.emaSimulate(all,rows,config);
    const st=sim.stats;
    $('actualRR').textContent='实际平均盈亏比：'+(st.realizedRR===null?'暂无足够盈利及亏损样本':'1:'+st.realizedRR.toFixed(2));
    const money=n=>Number(n).toFixed(2);
-   $('summary').textContent='已平仓 '+st.count+' 笔 ｜ 胜率 '+st.winRate.toFixed(2)+'% ｜ 总盈利 '+money(st.profit)+' USDT ｜ 总亏损 '+money(st.loss)+' USDT ｜ 净盈亏 '+money(st.net)+' USDT ｜ 实际平均盈亏比 '+(st.realizedRR===null?'暂无':st.realizedRR.toFixed(2))+' ｜ 收益率 '+st.returnPct.toFixed(2)+'% ｜ 最大回撤 '+money(st.maxDrawdown)+' USDT ('+st.maxDrawdownPct.toFixed(2)+'%) ｜ 同根止盈止损排除 '+sim.excluded.ambiguous+' 笔 ｜ 重叠信号排除 '+sim.excluded.overlap+' 笔 ｜ 未平仓/数据不足 '+sim.excluded.unfinished+' 笔。资金费率未计入；非完整回测。';
+   $('summary').textContent='已平仓 '+st.count+' 笔 ｜ 胜率 '+st.winRate.toFixed(2)+'% ｜ 总盈利 '+money(st.profit)+' USDT ｜ 总亏损 '+money(st.loss)+' USDT ｜ 净盈亏 '+money(st.net)+' USDT ｜ 实际平均盈亏比 '+(st.realizedRR===null?'暂无':st.realizedRR.toFixed(2))+' ｜ 收益率 '+st.returnPct.toFixed(2)+'% ｜ 最大回撤 '+money(st.maxDrawdown)+' USDT ('+st.maxDrawdownPct.toFixed(2)+'%) ｜ 同根止盈止损排除 '+sim.excluded.ambiguous+' 笔 ｜ 重叠信号排除 '+sim.excluded.overlap+' 笔 ｜ 未平仓/数据不足 '+sim.excluded.unfinished+' 笔。资金费率'+(feeOnly?'按试算选项暂不计入':'按设置处理')+'；非完整回测。';
    const tradeRoot=$('tradeResults');tradeRoot.replaceChildren();
    if(!sim.trades.length)tradeRoot.textContent='没有符合条件的已平仓交易，实际盈亏比不可计算。';
    for(const t of [...sim.trades].reverse()){
@@ -90,7 +92,7 @@ $('start').onclick=async()=>{
     if(t)detail.textContent+=' ｜ '+(t.exitType==='target'?'止盈':t.exitType==='stop'?'止损':'到期平仓')+' ｜ 净盈亏 '+money(t.pnl)+' USDT';
     else detail.textContent+=' ｜ 未计入模拟交易';
    }
-  }catch(e){$('tradeResults').textContent='交易盈亏未计算：'+e.message;$('actualRR').textContent='实际平均盈亏比：未计算';$('summary').textContent='盈亏模拟未执行：'+e.message+'。请在回测设置中关闭资金费率，并选择下一根开盘价入场。';}
+  }catch(e){$('tradeResults').textContent='交易盈亏未计算：'+e.message;$('actualRR').textContent='实际平均盈亏比：未计算';$('summary').textContent='盈亏模拟未执行：'+e.message+'。可勾选仅试算（不含资金费率），并在设置中选择下一根开盘价入场。';}
  }catch(e){$('status').textContent=e.name==='AbortError'?'扫描已停止':'扫描失败：'+e.message}
  finally{aborter=null;$('start').disabled=false}
 };

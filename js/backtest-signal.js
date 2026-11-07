@@ -20,7 +20,7 @@ async function klines(symbol,tf,days,signal,onPage){
  }
  return {all,start,end};
 }
-function analyze(raw,start,end,tf,onMatch){
+function analyze(raw,start,end,tf,onMatch,symbol=$('symbol').value.trim().toUpperCase()){
  const periods=[25,50,100],alpha=periods.map(p=>2/(p+1)),ema=[null,null,null];
  const seed=periods.map(()=>[]);let found=0,checked=0,skipped=0;
  for(let i=0;i<raw.length;i++){
@@ -37,7 +37,7 @@ function analyze(raw,start,end,tf,onMatch){
   const lo=Math.min(...ema),hi=Math.max(...ema);
   const long=cl>o&&o<lo&&cl>hi&&ema[2]<ema[0]&&ema[2]<ema[1];
   const short=cl<o&&o>hi&&cl<lo&&ema[2]>ema[0]&&ema[2]>ema[1];
-  if(long||short){found++;onMatch({symbol:$('symbol').value.trim().toUpperCase(),tf,side:long?'多头':'空头',signalTime:t,entryTime:Number(next[0]),entry:Number(next[1]),signalClose:cl,ema:[...ema]})}
+  if(long||short){found++;onMatch({symbol,tf,side:long?'多头':'空头',signalTime:t,entryTime:Number(next[0]),entry:Number(next[1]),signalClose:cl,ema:[...ema]})}
  }
  return {found,checked,skipped};
 }
@@ -51,10 +51,56 @@ $('start').onclick=async()=>{
   if($('scope').value==='market'){
    $('status').textContent='正在核验历史每日成交额排名…';
    const ranked=await window.emaHistoricalUniverse(days,Number(settings().topN??100),aborter.signal,p=>{$('status').textContent='历史排名：'+p.completed+'/'+p.total+' 个交易对，失败 '+p.failed});
-   $('status').textContent='历史排名核验完成：'+ranked.days+' 天、涉及 '+ranked.symbols.length+' 个不同交易对。'+ranked.method+'。下一阶段接入全市场逐币种K线及撮合；当前没有生成交易盈亏。';
-   $('summary').textContent='历史排名阶段完成；尚未运行全市场交易撮合，不能计算全市场盈亏比。';
-   $('actualRR').textContent='实际平均盈亏比：待全市场交易撮合';
-   $('tradeResults').textContent='历史交易对筛选已完成，尚无全市场模拟交易。';
+   const config=settings();
+   if(config.entryMode==='offset'||(config.funding!==false&&config.feeOnly===false)){
+    throw Error('全市场模拟暂不支持限价偏移或资金费率；请在设置中选择下一根开盘入场并启用仅试算');
+   }
+   config.funding=false;
+   const allTrades=[], excluded={ambiguous:0,overlap:0,invalid:0,unfinished:0};
+   let done=0,failed=[],signalCount=0,checked=0;
+   const cutoff=Math.floor(Date.now()/86400000)*86400000;
+   const begin=cutoff-days*86400000;
+   const root=$('tradeResults');root.replaceChildren();
+   const money=n=>Number(n).toFixed(2);
+   const addTrade=t=>{
+    const card=document.createElement('div');card.className='panel';
+    const title=document.createElement('strong');title.textContent=t.symbol+' · '+t.tf+' · '+t.side+' · '+(t.pnl>=0?'盈利 ':'亏损 ')+money(t.pnl)+' USDT';
+    title.style.color=t.pnl>=0?'#ff656d':'#48d69a';
+    const detail=document.createElement('p');detail.className='muted';
+    detail.textContent='开仓 '+fmt(t.entryTime)+' ｜ 入场 '+t.entry.toFixed(4)+' ｜ 平仓 '+fmt(t.exitTime)+' ｜ 平仓价 '+t.exit.toFixed(4)+' ｜ 手续费 '+money(t.fee)+' USDT';
+    card.append(title,detail);root.append(card);
+   };
+   for(const sym of ranked.symbols){
+    if(aborter.signal.aborted)throw new DOMException('已取消','AbortError');
+    try{
+     const {all}=await klines(sym,tf,days+2,aborter.signal,()=>{});
+     if(all.length<401)throw Error('历史K线不足401根');
+     const matches=[];
+     const outcome=analyze(all,begin,cutoff,tf,x=>{
+      const day=Math.floor(x.signalTime/86400000)*86400000;
+      if(!ranked.ranks.get(day)?.has(sym))return;
+      matches.push(x);signalCount++;
+      $('count').textContent=String(signalCount);
+     },sym);
+     checked+=outcome.checked;
+     const sim=window.emaSimulate(all,matches,config);
+     for(const k of Object.keys(excluded))excluded[k]+=sim.excluded[k]||0;
+     for(const t of sim.trades){allTrades.push(t);addTrade(t)}
+    }catch(e){if(aborter.signal.aborted)throw e;failed.push(sym+': '+e.message)}
+    done++;
+    $('status').textContent='历史K线与撮合 '+done+'/'+ranked.symbols.length+' ｜ 信号 '+signalCount+' ｜ 已平仓 '+allTrades.length+' ｜ 失败 '+failed.length;
+    if(done%10===0)await new Promise(resolve=>setTimeout(resolve,0));
+   }
+   if(failed.length){
+    $('status').textContent='扫描未完整：'+failed.length+' 个交易对失败（例如 '+failed.slice(0,3).join('；')+'）。不得将结果当作完整市场回测。';
+   }else $('status').textContent='历史逐币种扫描完成：'+done+' 个交易对，'+checked+' 根候选K线，'+signalCount+' 个信号，'+allTrades.length+' 笔已平仓交易。';
+   if(!allTrades.length)root.textContent='没有符合条件的已平仓交易。';
+   const wins=allTrades.filter(t=>t.pnl>0),losses=allTrades.filter(t=>t.pnl<0);
+   const profit=wins.reduce((n,t)=>n+t.pnl,0),loss=-losses.reduce((n,t)=>n+t.pnl,0);
+   const ratio=wins.length&&losses.length?(profit/wins.length)/(loss/losses.length):null;
+   $('actualRR').textContent='实际平均盈亏比：'+(ratio===null?'暂无足够盈亏样本':'1:'+ratio.toFixed(2));
+   $('summary').textContent='已平仓 '+allTrades.length+' 笔 ｜ 胜率 '+(allTrades.length?100*wins.length/allTrades.length:0).toFixed(2)+'% ｜ 总盈利 '+money(profit)+' USDT ｜ 总亏损 '+money(loss)+' USDT ｜ 净盈亏 '+money(profit-loss)+' USDT ｜ 同根双触及排除 '+excluded.ambiguous+' 笔 ｜ 重叠排除 '+excluded.overlap+' 笔。仅为逐币种模拟汇总，不包含资金费率、跨币种资金占用与全市场组合回撤'+(failed.length?'；存在数据失败，不完整':'')+'。';
+   $('results').textContent='历史每日前100过滤后识别 '+signalCount+' 个信号；详细已平仓记录见上方。';
    return;
   }
   const info=await json(api+'/fapi/v1/exchangeInfo',aborter.signal);

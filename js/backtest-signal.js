@@ -48,6 +48,15 @@ $('start').onclick=async()=>{
  if(!/^[A-Z0-9]{3,30}USDT$/.test(symbol)){ $('status').textContent='请输入有效的USDT合约交易对，例如 BTCUSDT';return}
  aborter=new AbortController();$('start').disabled=true;$('tradeResults').textContent='正在扫描，尚未生成已平仓交易';$('summary').textContent='等待扫描完成后模拟撮合';$('results').replaceChildren();$('count').textContent='0';
  try{
+  if($('scope').value==='market'){
+   $('status').textContent='正在核验历史每日成交额排名…';
+   const ranked=await window.emaHistoricalUniverse(days,Number(settings().topN??100),aborter.signal,p=>{$('status').textContent='历史排名：'+p.completed+'/'+p.total+' 个交易对，失败 '+p.failed});
+   $('status').textContent='历史排名核验完成：'+ranked.days+' 天、涉及 '+ranked.symbols.length+' 个不同交易对。'+ranked.method+'。下一阶段接入全市场逐币种K线及撮合；当前没有生成交易盈亏。';
+   $('summary').textContent='历史排名阶段完成；尚未运行全市场交易撮合，不能计算全市场盈亏比。';
+   $('actualRR').textContent='实际平均盈亏比：待全市场交易撮合';
+   $('tradeResults').textContent='历史交易对筛选已完成，尚无全市场模拟交易。';
+   return;
+  }
   const info=await json(api+'/fapi/v1/exchangeInfo',aborter.signal);
   const contract=info.symbols.find(x=>x.symbol===symbol&&x.contractType==='PERPETUAL'&&x.quoteAsset==='USDT');
   if(!contract)throw Error('不是币安USDT永续合约');
@@ -100,3 +109,6 @@ const s=settings();if([7,30,60].includes(Number(s.days)))$('days').value=String(
 if(Array.isArray(s.timeframes)&&s.timeframes.includes('30m'))$('tf').value='30m';
 
 $('rrDisplay').textContent='目标盈亏比：1:'+(Number(settings().rr??1).toFixed(2));
+
+$('scope').addEventListener('change',()=>{$('symbolField').style.display=$('scope').value==='single'?'block':'none';$('start').textContent=$('scope').value==='single'?'开始历史信号扫描':'开始历史排名核验';});
+$('scope').dispatchEvent(new Event('change'));

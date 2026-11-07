@@ -3,14 +3,22 @@
 window.emaSimulate=function(raw,signals,opts){
  const cfg={notional:Number(opts.notional??1000),leverage:Number(opts.leverage??1),initialCapital:Number(opts.initialCapital??10000),hardStop:Number(opts.hardStop??2)/100,rr:Number(opts.rr??1),holdCandles:Number(opts.holdCandles??12),entryFee:Number(opts.entryFee??0.02)/100,tpFee:Number(opts.tpFee??0.02)/100,slFee:Number(opts.slFee??0.05)/100,slippage:Number(opts.slippage??0.05)/100,stopMode:opts.stopMode??'hard_open',excludeAmbiguous:opts.excludeAmbiguous!==false};
  if(Object.entries(cfg).some(([k,v])=>typeof v==='number'&&(!Number.isFinite(v)||v<0))||cfg.notional<=0||cfg.leverage<1||cfg.holdCandles<1||cfg.rr<=0)throw Error('回测参数无效');
- if(opts.entryMode==='offset'||opts.funding!==false)throw Error('当前只支持下一根开盘入场，且资金费率必须关闭；尚未实现的设置不能忽略');
+ if(opts.funding!==false)throw Error('资金费率尚未实现，请关闭资金费率');
+ const offsetMode=opts.entryMode==='offset',offset=Number(opts.entryOffset??0.5)/100;
+ if(offsetMode&&(!Number.isFinite(offset)||offset<=0||offset>=1))throw Error('限价偏移参数无效');
  const byOpen=new Map(raw.map((c,i)=>[Number(c[0]),i]));
  const trades=[],excluded={ambiguous:0,overlap:0,invalid:0,unfinished:0};
  let busyUntil=-1;
  for(const s of [...signals].sort((a,b)=>a.entryTime-b.entryTime)){
   const idx=byOpen.get(s.entryTime);if(idx===undefined){excluded.invalid++;continue}
   if(idx<=busyUntil){excluded.overlap++;continue}
-  const entry=Number(raw[idx][1]),long=s.side==='多头';
+  const open=Number(raw[idx][1]),long=s.side==='多头';
+  const entry=offsetMode?open*(long?1-offset:1+offset):open;
+  if(offsetMode){const high=Number(raw[idx][2]),low=Number(raw[idx][3]),closeTime=Number(raw[idx][6]);
+   if(closeTime>=Date.now()){excluded.unfinished++;continue}
+   if(![high,low].every(Number.isFinite)){excluded.invalid++;continue}
+   if(long?low>entry:high<entry){continue}
+  }
   if(!Number.isFinite(entry)||entry<=0){excluded.invalid++;continue}
   const signalIndex=idx-1;
   const interval={'15m':900000,'30m':1800000,'1h':3600000,'2h':7200000,'4h':14400000,'6h':21600000,'8h':28800000,'12h':43200000,'1d':86400000}[s.tf];
@@ -31,6 +39,12 @@ window.emaSimulate=function(raw,signals,opts){
    if(closeTime>=Date.now()){break}
    if(j>idx&&Number(raw[j][0])-Number(raw[j-1][0])!==interval)break
    if(![o,h,l,cl].every(Number.isFinite)){break}
+   if(offsetMode&&j===idx){
+    // Intrabar order of entry and exit is unknowable from OHLC: do not invent an exit on entry candle.
+    if((long?l<=stop:h>=stop)||(long?h>=target:l<=target)){outcome={type:'ambiguous',j};break}
+    if(j===last){outcome={type:'timeout',price:cl,j};break}
+    continue;
+   }
    const hitStop=long?l<=stop:h>=stop,hitTarget=long?h>=target:l<=target;
    if(hitStop&&hitTarget){outcome={type:'ambiguous',j};break}
    if(hitStop){const price=long?Math.min(o,stop)*(1-cfg.slippage):Math.max(o,stop)*(1+cfg.slippage);outcome={type:'stop',price,j};break}

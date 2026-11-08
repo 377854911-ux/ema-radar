@@ -99,12 +99,12 @@ $('start').onclick=async()=>{
      }
     }catch(e){if(aborter.signal.aborted)throw e;failed.push(sym+': '+e.message)}
     done++;progress(done,ranked.symbols.length,'交易对扫描');
-    $('status').textContent='历史K线与撮合 '+done+'/'+ranked.symbols.length+' ｜ 信号 '+signalCount+' ｜ 已平仓 '+allTrades.length+' ｜ 失败 '+failed.length;
+    $('status').textContent='历史K线与撮合 '+done+'/'+ranked.symbols.length+' ｜ 信号 '+signalCount+' ｜ 候选交易 '+allTrades.length+' ｜ 失败 '+failed.length;
     if(done%10===0)await new Promise(resolve=>setTimeout(resolve,0));
    }
    if(failed.length){
     $('status').textContent='扫描未完整：'+failed.length+' 个交易对失败（例如 '+failed.slice(0,3).join('；')+'）。不得将结果当作完整市场回测。';
-   }else $('status').textContent='历史逐币种扫描完成：'+done+' 个交易对，'+checked+' 根候选K线，'+signalCount+' 个信号，'+allTrades.length+' 笔已平仓交易。';
+   }else $('status').textContent='历史逐币种扫描完成：'+done+' 个交易对，'+checked+' 根候选K线，'+signalCount+' 个信号，'+allTrades.length+' 笔候选交易。';
    const portfolio=config.positionMode==='martingale'?window.emaMartingale(allTrades,config):window.emaPortfolio(allTrades,config);
    root.replaceChildren();
    const st=portfolio.stats;

@@ -1,5 +1,29 @@
 const btn=document.querySelector('#scan'),stop=document.querySelector('#stop'),status=document.querySelector('#status'),results=document.querySelector('#results');let cancelled=false,running=false;
-const soundToggle=document.querySelector('#soundToggle');let audioContext=null;try{const saved=JSON.parse(localStorage.getItem('ema.settings.scanner')||'{}');soundToggle.checked=saved.sound!==false}catch{soundToggle.checked=true}soundToggle.addEventListener('change',()=>{try{const saved=JSON.parse(localStorage.getItem('ema.settings.scanner')||'{}');saved.sound=soundToggle.checked;localStorage.setItem('ema.settings.scanner',JSON.stringify(saved))}catch{}if(soundToggle.checked)unlockAudio()});function unlockAudio(){if(!soundToggle.checked)return;try{audioContext=audioContext||new (window.AudioContext||window.webkitAudioContext)();if(audioContext.state==='suspended')audioContext.resume().catch(()=>{})}catch{}}function playAlert(){if(!soundToggle.checked||!audioContext||audioContext.state!=='running')return;try{const now=audioContext.currentTime;for(let i=0;i<2;i++){const osc=audioContext.createOscillator(),gain=audioContext.createGain(),t=now+i*0.24;osc.type='sine';osc.frequency.value=i?880:660;gain.gain.setValueAtTime(0.0001,t);gain.gain.exponentialRampToValueAtTime(0.15,t+0.025);gain.gain.exponentialRampToValueAtTime(0.0001,t+0.18);osc.connect(gain);gain.connect(audioContext.destination);osc.start(t);osc.stop(t+0.19)}}catch{}}
+const soundToggle=document.querySelector('#soundToggle'),testSound=document.querySelector('#testSound');let audioContext=null,lastBellAt=0;
+try{const saved=JSON.parse(localStorage.getItem('ema.settings.scanner')||'{}');soundToggle.checked=saved.sound!==false}catch{soundToggle.checked=true}
+function unlockAudio(){
+if(!soundToggle.checked)return false;
+try{
+const Ctx=window.AudioContext||window.webkitAudioContext;if(!Ctx)return false;
+audioContext=audioContext||new Ctx();
+if(audioContext.state==='suspended')audioContext.resume().catch(()=>{});
+return true;
+}catch{return false}
+}
+function playAlert(force=false){
+if(!soundToggle.checked||!audioContext||audioContext.state!=='running')return false;
+const time=Date.now();if(!force&&time-lastBellAt<1200)return true;lastBellAt=time;
+try{const now=audioContext.currentTime+0.015;
+for(let i=0;i<3;i++){const osc=audioContext.createOscillator(),gain=audioContext.createGain(),t=now+i*0.20;osc.type='sine';osc.frequency.setValueAtTime([784,988,1175][i],t);gain.gain.setValueAtTime(0.0001,t);gain.gain.exponentialRampToValueAtTime(0.22,t+0.015);gain.gain.exponentialRampToValueAtTime(0.0001,t+0.17);osc.connect(gain);gain.connect(audioContext.destination);osc.start(t);osc.stop(t+0.18)}return true
+}catch{return false}
+}
+soundToggle.addEventListener('change',()=>{try{const saved=JSON.parse(localStorage.getItem('ema.settings.scanner')||'{}');saved.sound=soundToggle.checked;localStorage.setItem('ema.settings.scanner',JSON.stringify(saved))}catch{}if(soundToggle.checked)unlockAudio()});
+testSound.addEventListener('click',async()=>{
+if(!soundToggle.checked){status.textContent='请先开启声音提醒';return}
+if(!unlockAudio()){status.textContent='当前浏览器不支持音频提醒';return}
+try{if(audioContext.state!=='running')await audioContext.resume();status.textContent=playAlert(true)?'已播放测试铃声；如果听不到，请检查 iPhone 音量、静音模式和声音输出':'无法播放铃声，请在页面内再次点击试听铃声'}catch{status.textContent='音频启动失败，请再次点击试听铃声'}
+});
+document.addEventListener('visibilitychange',()=>{if(!document.hidden&&audioContext&&soundToggle.checked&&audioContext.state==='suspended')status.textContent='声音提醒需要点击「试听铃声」重新激活'});
 const tfMs={ '15m':900000,'30m':1800000,'1h':3600000,'2h':7200000,'4h':14400000,'6h':21600000,'8h':28800000,'12h':43200000,'1d':86400000 };
 const config=()=>{let s={};try{s=JSON.parse(localStorage.getItem('ema.settings.scanner')||'{}')}catch{}return {timeframes:Array.isArray(s.timeframes)?s.timeframes.filter(x=>tfMs[x]):['15m','30m','1h','2h','4h','6h','8h','12h','1d'],directions:Array.isArray(s.directions)?s.directions:['long','short'],topN:Math.min(100,Math.max(1,Number(s.topN)||100)),maxMove:Number.isFinite(Number(s.maxMove))?Number(s.maxMove):30,ema:[Number(s.emaFast)||25,Number(s.emaMid)||50,Number(s.emaSlow)||100],excludeObservation:s.excludeObservation!==false,excludeDelist:s.excludeDelist!==false}};
 const choices=document.querySelector('#timeframeChoices'),autoScan=document.querySelector('#autoScan'),scanInterval=document.querySelector('#scanInterval');let autoTimer=null;
@@ -41,7 +65,7 @@ let entry=entries.get(key);if(!entry){entry={periods:new Set(),element:null};ent
 entry.periods.add(task.tf);const v={...task,...sig};const el=renderSignal(v,entry);
 if(entry.element)entry.element.replaceWith(el);else results.prepend(el);
 entry.element=el;
-if(sig.forming)playAlert();
+if(!entry.alerted){entry.alerted=true;playAlert()}
 }
 }catch(e){errors++}finally{scanned++;progress(scanned,total);status.textContent='已检查 '+scanned+'/'+total+' · 信号 '+matches+' · 请求失败 '+errors}
 }};await Promise.all(Array.from({length:4},worker));

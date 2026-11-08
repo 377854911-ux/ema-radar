@@ -19,5 +19,33 @@ function signal(raw,periods,tf,now){if(!Array.isArray(raw)||raw.length<Math.max(
 
 
 
+const progressTrack=document.querySelector('#progressTrack'),progressFill=document.querySelector('#progressFill');
+function progress(done,total){const pct=total?Math.round(done/total*100):0;progressFill.style.width=pct+'%';progressTrack.setAttribute('aria-valuenow',String(pct))}
+function renderSignal(v,entry){const el=document.createElement('p');el.style.cssText='padding:10px 0;border-bottom:1px solid #304866;margin:0';const arrow=document.createElement('strong');arrow.textContent=v.side==='long'?'▲ 做多':'▼ 做空';arrow.style.color=v.side==='long'?'#ff5757':'#36d982';const t=new Date(v.time).toLocaleString('zh-CN',{hour12:false,timeZone:'Africa/Conakry'});el.append(v.symbol+' · '+[...entry.periods].join('、')+' · ',arrow,' · '+(v.forming?'⚠ 未收盘预警':'✓ 已收盘确认')+' · K线 '+t+' (几内亚时间) · 开盘 '+v.open+' · '+(v.forming?'当前价 ':'收盘价 ')+v.close+' · EMA '+v.ema.map(x=>x.toPrecision(7)).join('/')+' · 聚拢差 '+v.spread.toFixed(3)+'%');return el}
 stop.onclick=()=>{cancelled=true;status.textContent='正在停止扫描…'};
-btn.onclick=async()=>{if(running)return;running=true;cancelled=false;unlockAudio();btn.disabled=true;results.replaceChildren();const s=config();let scanned=0,matches=0,errors=0;try{if(!s.timeframes.length)throw Error('请在主页面至少选择一个周期');if(!s.directions.length)throw Error('请至少选择一个扫描方向');if(s.ema.some(x=>!Number.isInteger(x)||x<1)||new Set(s.ema).size!==3)throw Error('EMA参数须为三个不同的正整数');status.textContent='读取合约列表与成交额排名…';const [info,tickers]=await Promise.all([get('https://fapi.binance.com/fapi/v1/exchangeInfo'),get('https://fapi.binance.com/fapi/v1/ticker/24hr')]);const allowed=new Set(info.symbols.filter(x=>x.contractType==='PERPETUAL'&&x.quoteAsset==='USDT'&&x.status==='TRADING').map(x=>x.symbol));const ranked=tickers.filter(x=>allowed.has(x.symbol)&&Math.abs(Number(x.priceChangePercent))<=s.maxMove).sort((a,b)=>Number(b.quoteVolume)-Number(a.quoteVolume)).slice(0,s.topN);const tasks=ranked.flatMap(t=>s.timeframes.map(tf=>({symbol:t.symbol,tf})));const output=[];let cursor=0;const worker=async()=>{while(cursor<tasks.length&&!cancelled){const task=tasks[cursor++];try{const now=Date.now();const limit=Math.min(1000,Math.max(400,Math.max(...s.ema)*4+5));const raw=await get('https://fapi.binance.com/fapi/v1/klines?symbol='+encodeURIComponent(task.symbol)+'&interval='+task.tf+'&limit='+limit);const signals=signal(raw,s.ema,task.tf,now);for(const sig of signals){if(s.directions.includes(sig.side)){output.push({...task,...sig});matches++}}}catch(e){errors++}scanned++;status.textContent='已检查 '+scanned+'/'+tasks.length+' · 匹配 '+matches+' · 请求失败 '+errors}};await Promise.all(Array.from({length:4},worker));output.sort((a,b)=>Number(b.forming)-Number(a.forming)||b.time-a.time||a.spread-b.spread);for(const v of output){const el=document.createElement('p');const arrow=document.createElement('strong');arrow.textContent=v.side==='long'?'▲ 做多':'▼ 做空';arrow.style.color=v.side==='long'?'#ff5757':'#36d982';el.append(v.symbol+' · '+v.tf+' · ',arrow,' · '+(v.forming?'⚠ 未收盘预警':'✓ 已收盘确认')+' · K线 '+new Date(v.time).toLocaleString('zh-CN',{hour12:false})+' (本地时间) · 开盘 '+v.open+' · '+(v.forming?'当前价 ':'收盘价 ')+v.close+' · EMA '+v.ema.map(x=>x.toPrecision(7)).join('/')+' · 聚拢差 '+v.spread.toFixed(3)+'%');results.append(el)}if(output.length&&!cancelled)playAlert();if(!output.length)results.textContent='本次没有当前未收盘预警或上一根已收盘确认信号';status.textContent=(cancelled?'扫描已停止':'扫描完成')+' · '+scanned+'/'+tasks.length+' · 匹配 '+matches+' · 请求失败 '+errors+'。未收盘预警仅供人工观察；已收盘信号也需由自动交易模块独立验证。聚拢阈值、观察标签尚未验证。';}catch(e){status.textContent='扫描失败：'+e.message}finally{running=false;btn.disabled=false}};
+btn.onclick=async()=>{if(running)return;running=true;cancelled=false;unlockAudio();btn.disabled=true;results.replaceChildren();progress(0,0);const s=config();let scanned=0,matches=0,errors=0,total=0;const entries=new Map();
+try{
+if(!s.timeframes.length)throw Error('请在主页面至少选择一个周期');
+if(!s.directions.length)throw Error('请至少选择一个扫描方向');
+if(s.ema.some(x=>!Number.isInteger(x)||x<1)||new Set(s.ema).size!==3)throw Error('EMA参数须为三个不同的正整数');
+status.textContent='读取合约列表与成交额排名…';
+const [info,tickers]=await Promise.all([get('https://fapi.binance.com/fapi/v1/exchangeInfo'),get('https://fapi.binance.com/fapi/v1/ticker/24hr')]);
+if(cancelled)return;
+const allowed=new Set(info.symbols.filter(x=>x.contractType==='PERPETUAL'&&x.quoteAsset==='USDT'&&x.status==='TRADING').map(x=>x.symbol));
+const ranked=tickers.filter(x=>allowed.has(x.symbol)&&Math.abs(Number(x.priceChangePercent))<=s.maxMove).sort((a,b)=>Number(b.quoteVolume)-Number(a.quoteVolume)).slice(0,s.topN);
+const tasks=ranked.flatMap(t=>s.timeframes.map(tf=>({symbol:t.symbol,tf})));total=tasks.length;let cursor=0;
+const worker=async()=>{while(cursor<tasks.length&&!cancelled){const task=tasks[cursor++];try{const now=Date.now();const limit=Math.min(1000,Math.max(400,Math.max(...s.ema)*4+5));const raw=await get('https://fapi.binance.com/fapi/v1/klines?symbol='+encodeURIComponent(task.symbol)+'&interval='+task.tf+'&limit='+limit);const signals=signal(raw,s.ema,task.tf,now)||[];
+for(const sig of signals){if(cancelled||!s.directions.includes(sig.side))continue;matches++;
+const key=task.symbol+'|'+sig.side+'|'+(sig.forming?'forming':'confirmed');
+let entry=entries.get(key);if(!entry){entry={periods:new Set(),element:null};entries.set(key,entry)}
+entry.periods.add(task.tf);const v={...task,...sig};const el=renderSignal(v,entry);
+if(entry.element)entry.element.replaceWith(el);else results.prepend(el);
+entry.element=el;
+if(sig.forming)playAlert();
+}
+}catch(e){errors++}finally{scanned++;progress(scanned,total);status.textContent='已检查 '+scanned+'/'+total+' · 信号 '+matches+' · 请求失败 '+errors}
+}};await Promise.all(Array.from({length:4},worker));
+if(!entries.size)results.textContent='本次没有当前未收盘预警或上一根已收盘确认信号';
+status.textContent=(cancelled?'扫描已停止':'扫描完成')+' · '+scanned+'/'+total+' · 信号 '+matches+' · 请求失败 '+errors+'。未收盘预警仅供人工观察；已收盘信号也需由自动交易模块独立验证。聚拢阈值、观察标签尚未验证。';
+}catch(e){status.textContent='扫描失败：'+e.message}finally{running=false;btn.disabled=false}
+};

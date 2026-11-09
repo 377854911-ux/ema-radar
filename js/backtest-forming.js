@@ -28,13 +28,13 @@ window.emaFormingBacktest=async function(symbol,tfs,days,config,signal,onProgres
  const hardStop=Number(config.hardStop??2)/100,slippage=Number(config.slippage??0.05)/100,rr=Number(config.rr??1);
  const early=Number(config.formingEarlyTp??5)/100,notional=Number(config.notional??1000),hold=Math.max(1,Math.floor(Number(config.holdCandles??9)));
  if(!(early>=0.01&&early<=0.10)||!(notional>0)||!(rr>0)||!(hardStop>0))throw Error('信号形成中止盈参数无效');
- const trades=[],rows=[],candidates=[],closedSignals=[];const excluded={ambiguous:0,invalid:0,unfinished:0,incomplete:0,occupied:0,late:0,notFilled:0};
+ const trades=[],rows=[],candidates=[],closedSignals=[],candidateByCandle=new Map();const excluded={ambiguous:0,invalid:0,unfinished:0,incomplete:0,occupied:0,late:0,notFilled:0};
  for(const tf of tfs){
   if(signal.aborted)throw new DOMException('已取消','AbortError');
   onProgress('正在进行 '+tf+' 信号形成中回测…');
   const step=interval[tf],parent=await load(tf,Math.max(0,start-405*step),end);
   const lengths=[25,50,100],a=lengths.map(n=>2/(n+1)),seed=lengths.map(()=>[]),ema=[null,null,null];
-  let active=null,busyUntil=0;
+  let active=null,busyUntil=0;const candleKey=t=>tf+':'+t;
   function valid(o,cl,e,high,low){
    const lo=Math.min(...e),hi=Math.max(...e),body=Math.abs(cl-o);
    const isLong=cl>o&&o<lo&&cl>hi&&e[2]<e[0]&&e[2]<e[1];
@@ -99,7 +99,7 @@ window.emaFormingBacktest=async function(symbol,tfs,days,config,signal,onProgres
        if(v.long||v.short){
         signalLogged=true;
         const candidate={symbol,tf,side:v.long?'多头':'空头',signalTime:t,detectedTime:mt+minMs,status:'候选'};
-        candidates.push(candidate);
+        candidates.push(candidate);candidateByCandle.set(candleKey(t),candidate);
         if(j===count-1){candidate.status='最后一分钟才形成，无法在收盘前入场';excluded.late++;}
         else if(active||mt<busyUntil){candidate.status='已有持仓';excluded.occupied++;}
         else trigger={j,long:v.long,high,low,candidate};
@@ -132,8 +132,10 @@ window.emaFormingBacktest=async function(symbol,tfs,days,config,signal,onProgres
      const final=valid(o,cl,finalEma,highFinal,lowFinal);
      const accepted=(final.long&&final.wickLong<final.body*0.5)||(final.short&&final.wickShort<final.body*0.5);
      if(accepted){
-      const matched=candidates.find(x=>x.tf===tf&&x.signalTime===t);
-      closedSignals.push({symbol,tf,side:final.long?'多头':'空头',signalTime:t,status:matched?'已发现形成中候选：'+matched.status:'未发现形成中候选',matched:!!matched});
+      const matched=candidateByCandle.get(candleKey(t));
+      const filled=rows.find(x=>x.tf===tf&&x.signalTime===t);
+      const reason=filled?'形成中已入场'+(filled.status?'（'+filled.status+'）':''):matched?matched.status:'分钟级未发现候选';
+      closedSignals.push({symbol,tf,side:final.long?'多头':'空头',signalTime:t,status:reason,matched:!!matched,entered:!!filled});
      }
     }
    }

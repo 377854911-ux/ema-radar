@@ -28,7 +28,7 @@ window.emaFormingBacktest=async function(symbol,tfs,days,config,signal,onProgres
  const hardStop=Number(config.hardStop??2)/100,slippage=Number(config.slippage??0.05)/100,rr=Number(config.rr??1);
  const early=Number(config.formingEarlyTp??5)/100,notional=Number(config.notional??1000),hold=Math.max(1,Math.floor(Number(config.holdCandles??9)));
  if(!(early>=0.01&&early<=0.10)||!(notional>0)||!(rr>0)||!(hardStop>0))throw Error('信号形成中止盈参数无效');
- const trades=[],rows=[],candidates=[];const excluded={ambiguous:0,invalid:0,unfinished:0,incomplete:0,occupied:0,late:0,notFilled:0};
+ const trades=[],rows=[],candidates=[],closedSignals=[];const excluded={ambiguous:0,invalid:0,unfinished:0,incomplete:0,occupied:0,late:0,notFilled:0};
  for(const tf of tfs){
   if(signal.aborted)throw new DOMException('已取消','AbortError');
   onProgress('正在进行 '+tf+' 信号形成中回测…');
@@ -123,9 +123,23 @@ window.emaFormingBacktest=async function(symbol,tfs,days,config,signal,onProgres
      if(!complete)excluded.incomplete++;
     }
    }
+   // Independent closed-candle audit: do not infer signal count from filled orders.
+   // Uses precisely the same candle-close EMA and 50% wick conditions as standard backtest.
+   if(ready&&t>=start&&t+step<=end){
+    const finalEma=previous.map((x,k)=>a[k]*cl+(1-a[k])*x);
+    const highFinal=number(c,2),lowFinal=number(c,3);
+    if([o,cl,highFinal,lowFinal,...finalEma].every(Number.isFinite)){
+     const final=valid(o,cl,finalEma,highFinal,lowFinal);
+     const accepted=(final.long&&final.wickLong<final.body*0.5)||(final.short&&final.wickShort<final.body*0.5);
+     if(accepted){
+      const matched=candidates.find(x=>x.tf===tf&&x.signalTime===t);
+      closedSignals.push({symbol,tf,side:final.long?'多头':'空头',signalTime:t,status:matched?'已发现形成中候选：'+matched.status:'未发现形成中候选',matched:!!matched});
+     }
+    }
+   }
    for(let k=0;k<3;k++){if(ema[k]===null){seed[k].push(cl);if(seed[k].length===lengths[k])ema[k]=seed[k].reduce((x,y)=>x+y,0)/lengths[k]}else ema[k]=a[k]*cl+(1-a[k])*ema[k]}
   }
   if(active){excluded.unfinished++;active=null}
  }
- return {trades,rows,candidates,excluded,minuteCount:minutes.length};
+ return {trades,rows,candidates,closedSignals,excluded,minuteCount:minutes.length};
 };

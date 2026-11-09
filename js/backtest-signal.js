@@ -59,6 +59,7 @@ $('start').onclick=async()=>{
  if(!/^[A-Z0-9]{3,30}USDT$/.test(symbol)){ $('status').textContent='请输入有效的USDT合约交易对，例如 BTCUSDT';return}
  aborter=new AbortController();$('start').disabled=true;$('tradeResults').textContent='正在扫描，尚未生成已平仓交易';resetBacktestStats();progress(0,1,'准备扫描');$('summary').textContent='正在回测 · 临时统计';$('results').replaceChildren();$('count').textContent='0';
  try{
+  $('formingCandidatesPanel').style.display='none';
   if($('scope').value==='single'&&$('singleEntryMode').value==='forming'){
    const config=settings();
    if(config.feeOnly!==false)config.funding=false;
@@ -67,7 +68,7 @@ $('start').onclick=async()=>{
    const info=await json(api+'/fapi/v1/exchangeInfo',aborter.signal);
    if(!info.symbols.some(x=>x.symbol===symbol&&x.contractType==='PERPETUAL'&&x.quoteAsset==='USDT'))throw Error('不是币安USDT永续合约');
    const outcome=await window.emaFormingBacktest(symbol,tfs,days,config,aborter.signal,info=>{$('status').textContent=info});
-   $('count').textContent=String(outcome.rows.length);
+   $('count').textContent=String(outcome.candidates.length);
    const root=$('tradeResults');
    const portfolio=config.positionMode==='martingale'?window.emaMartingale(outcome.trades,config):window.emaPortfolio(outcome.trades,{...config,maxPositions:1e6});
    const st=portfolio.stats;
@@ -77,7 +78,7 @@ $('start').onclick=async()=>{
    const money=n=>Number(n).toFixed(2);
    const invalid=portfolio.trades.filter(t=>t.exitType==='signal_invalid').length;
    const early=portfolio.trades.filter(t=>t.exitType==='forming_early_tp').length;
-   $('summary').textContent='1分钟K线模拟（非逐笔行情）｜信号形成中入场 '+outcome.rows.length+' 笔｜已平仓 '+st.count+' 笔｜形成中提前止盈 '+early+' 笔｜信号失效平仓 '+invalid+' 笔｜胜率 '+money(st.winRate)+'%｜净盈亏 '+money(st.net)+' USDT｜收益率 '+money(st.returnPct)+'%｜数据缺口 '+outcome.excluded.incomplete+' 根｜同一分钟触发冲突排除 '+outcome.excluded.ambiguous+' 笔｜资金费率未计入';
+   $('summary').textContent='1分钟K线模拟（非逐笔行情）｜发现候选信号 '+outcome.candidates.length+' 次｜模拟入场 '+outcome.rows.length+' 笔｜已平仓 '+st.count+' 笔｜最后一分钟才形成 '+outcome.excluded.late+' 次｜持仓冲突 '+outcome.excluded.occupied+' 次｜止损价无效 '+outcome.excluded.invalid+' 次｜同一分钟止盈止损冲突 '+outcome.excluded.ambiguous+' 次｜形成中提前止盈 '+early+' 笔｜信号失效平仓 '+invalid+' 笔｜胜率 '+money(st.winRate)+'%｜净盈亏 '+money(st.net)+' USDT｜收益率 '+money(st.returnPct)+'%｜数据缺口 '+outcome.excluded.incomplete+' 根｜资金费率未计入';
    root.replaceChildren();
    for(const t of [...portfolio.trades].sort((a,b)=>b.entryTime-a.entryTime)){
     const card=document.createElement('div');card.className='panel';
@@ -88,7 +89,15 @@ $('start').onclick=async()=>{
     card.append(title,detail);root.append(card);
    }
    if(!portfolio.trades.length)root.textContent='尚无已平仓交易';
-   $('results').textContent='信号形成中进场：'+outcome.rows.length+' 次；仅使用完整1分钟K线，分钟内先后顺序未知不做确定性成交假设。';
+   const candidatePanel=$('formingCandidatesPanel'),candidateRoot=$('formingCandidates');
+   candidatePanel.style.display='block';candidateRoot.replaceChildren();
+   for(const candidate of [...outcome.candidates].sort((a,b)=>b.detectedTime-a.detectedTime)){
+    const item=document.createElement('div');item.className='panel';
+    item.textContent=candidate.symbol+' · '+candidate.tf+' · '+candidate.side+' ｜ 发现 '+fmt(candidate.detectedTime)+' ｜ '+candidate.status;
+    candidateRoot.append(item);
+   }
+   if(!outcome.candidates.length)candidateRoot.textContent='没有检测到符合条件的候选信号';
+   $('results').textContent='候选 '+outcome.candidates.length+' 次，入场 '+outcome.rows.length+' 次；回测按1分钟已完成K线判断，不等于逐笔成交重放。';
    progress(tfs.length,tfs.length,'实验回测');
    $('status').textContent='实验回测完成：'+tfs.join('、')+' · '+outcome.minuteCount+' 根1分钟K线';
    return;

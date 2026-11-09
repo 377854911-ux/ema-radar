@@ -28,7 +28,7 @@ window.emaFormingBacktest=async function(symbol,tfs,days,config,signal,onProgres
  const hardStop=Number(config.hardStop??2)/100,slippage=Number(config.slippage??0.05)/100,rr=Number(config.rr??1);
  const early=Number(config.formingEarlyTp??5)/100,notional=Number(config.notional??1000),hold=Math.max(1,Math.floor(Number(config.holdCandles??9)));
  if(!(early>=0.01&&early<=0.10)||!(notional>0)||!(rr>0)||!(hardStop>0))throw Error('信号形成中止盈参数无效');
- const trades=[],rows=[];const excluded={ambiguous:0,invalid:0,unfinished:0,incomplete:0};
+ const trades=[],rows=[],candidates=[];const excluded={ambiguous:0,invalid:0,unfinished:0,incomplete:0,occupied:0,late:0,notFilled:0};
  for(const tf of tfs){
   if(signal.aborted)throw new DOMException('已取消','AbortError');
   onProgress('正在进行 '+tf+' 信号形成中回测…');
@@ -54,7 +54,7 @@ window.emaFormingBacktest=async function(symbol,tfs,days,config,signal,onProgres
    const previous=[...ema];
    const ready=i>=400&&previous.every(x=>x!==null);
    if(ready&&t>=start&&t+step<=end){
-    let high=o,low=o,trigger=null;
+    let high=o,low=o,trigger=null,signalLogged=false;
     const first=minuteMap.get(t),count=step/minMs;
     let complete=first!==undefined;
     if(complete){for(let j=0;j<count;j++){if(!minutes[first+j]||number(minutes[first+j],0)!==t+j*minMs){complete=false;break}}}
@@ -64,32 +64,46 @@ window.emaFormingBacktest=async function(symbol,tfs,days,config,signal,onProgres
       const m=minutes[first+j],mt=number(m,0),mo=number(m,1),mh=number(m,2),ml=number(m,3),mc=number(m,4);
       if(![mo,mh,ml,mc].every(Number.isFinite)){complete=false;break}
       high=Math.max(high,mh);low=Math.min(low,ml);
-      // An already opened position remains under stop and the relevant TP regime.
+      // A signal can first be confirmed only at the close of a completed 1m bar.
+      // Match a market order at the following 1m open; evaluate that entry bar thereafter.
+      if(trigger&&j===trigger.j+1){
+       if(!active&&mt>=busyUntil){
+        const entry=mo,long=trigger.long;
+        const structural=config.stopMode==='hard_extreme'?(long?trigger.low:trigger.high):o;
+        const hard=long?entry*(1-hardStop):entry*(1+hardStop);
+        const stop=long?Math.max(hard,structural):Math.min(hard,structural);
+        if(entry>0&&(long?stop<entry:stop>entry)){
+         active={long,entry,entryTime:mt,signalTime:t,stop,earlyPrice:long?entry*(1+early):entry*(1-early),target:null,deadline:t+(hold+1)*step};
+         rows.push({symbol,tf,side:long?'多头':'空头',signalTime:t,entryTime:mt,entry,forming:true});
+         trigger.candidate.status='入场';
+        }else {excluded.invalid++;trigger.candidate.status='止损价无效';}
+       }else {excluded.occupied++;trigger.candidate.status='已有持仓';}
+       trigger=null;
+      }
+      // Entry is at the minute open: both stop and TP can apply to this very minute.
       if(active&&mt>=active.entryTime){
        const s=active,hitStop=s.long?ml<=s.stop:mh>=s.stop;
        const hitTarget=s.target!==null&&(s.long?mh>=s.target:ml<=s.target);
        const hitEarly=s.target===null&&(s.long?mh>=s.earlyPrice:ml<=s.earlyPrice);
-       if(hitStop&&(hitTarget||hitEarly)){excluded.ambiguous++;busyUntil=mt+minMs;active=null}
+       if(hitStop&&(hitTarget||hitEarly)){
+        excluded.ambiguous++;busyUntil=mt+minMs;
+        const row=rows.findLast(x=>x.tf===tf&&x.entryTime===s.entryTime);
+        if(row)row.status='同分钟止盈止损冲突，不计入';
+        active=null;
+       }
        else if(hitStop){const fill=(s.long?Math.min(mo,s.stop):Math.max(mo,s.stop))*(s.long?1-slippage:1+slippage);finish(s,fill,mt+minMs,'stop',slFee);active=null}
        else if(hitTarget||hitEarly){const target=s.target??s.earlyPrice;const fill=s.long?Math.max(mo,target):Math.min(mo,target);finish(s,fill,mt+minMs,hitEarly?'forming_early_tp':'target',tpFee);active=null}
       }
-      // Place the order at the next 1m candle open, not at the confirming candle close.
-      if(trigger&&j===trigger.j+1&&!active&&mt>=busyUntil){
-       const entry=mo,long=trigger.long,signalTime=t;
-       const structural=config.stopMode==='hard_extreme'?(long?trigger.low:trigger.high):o;
-       const hard=long?entry*(1-hardStop):entry*(1+hardStop);
-       const stop=long?Math.max(hard,structural):Math.min(hard,structural);
-       if(entry>0&&(long?stop<entry:stop>entry)){
-        active={long,entry,entryTime:mt,signalTime,stop,earlyPrice:long?entry*(1+early):entry*(1-early),target:null,deadline:t+(hold+1)*step};
-        rows.push({symbol,tf,side:long?'多头':'空头',signalTime:t,entryTime:mt,entry,forming:true});
-       }else excluded.invalid++;
-       trigger=null;
-       // Entry bar cannot also use its full high/low to claim a deterministically ordered exit.
-       continue;
-      }
-      if(!active&&!trigger&&!rows.some(x=>x.tf===tf&&x.signalTime===t)&&j<count-1&&mt>=busyUntil){
+      if(!signalLogged){
        const e=previous.map((x,k)=>a[k]*mc+(1-a[k])*x),v=valid(o,mc,e,high,low);
-       if(v.long||v.short)trigger={j,long:v.long,high,low};
+       if(v.long||v.short){
+        signalLogged=true;
+        const candidate={symbol,tf,side:v.long?'多头':'空头',signalTime:t,detectedTime:mt+minMs,status:'候选'};
+        candidates.push(candidate);
+        if(j===count-1){candidate.status='最后一分钟才形成，无法在收盘前入场';excluded.late++;}
+        else if(active||mt<busyUntil){candidate.status='已有持仓';excluded.occupied++;}
+        else trigger={j,long:v.long,high,low,candidate};
+       }
       }
       // Parent K-line close: signal validity and the final candle-based take profit.
       if(j===count-1&&active&&active.signalTime===t){
@@ -113,5 +127,5 @@ window.emaFormingBacktest=async function(symbol,tfs,days,config,signal,onProgres
   }
   if(active){excluded.unfinished++;active=null}
  }
- return {trades,rows,excluded,minuteCount:minutes.length};
+ return {trades,rows,candidates,excluded,minuteCount:minutes.length};
 };

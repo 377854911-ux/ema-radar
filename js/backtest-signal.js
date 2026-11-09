@@ -41,6 +41,12 @@ function analyze(raw,start,end,tf,onMatch,symbol=$('symbol').value.trim().toUppe
   const lo=Math.min(...ema),hi=Math.max(...ema);
   const long=cl>o&&o<lo&&cl>hi&&ema[2]<ema[0]&&ema[2]<ema[1];
   const short=cl<o&&o>hi&&cl<lo&&ema[2]>ema[0]&&ema[2]>ema[1];
+  // Backtest-only wick filter: reject upper wick for longs, lower wick for shorts when >= 50% of body.
+  const body=Math.abs(cl-o),highPrice=Number(c[2]),lowPrice=Number(c[3]);
+  if(!Number.isFinite(highPrice)||!Number.isFinite(lowPrice)||!(body>0))continue;
+  const upperWick=Math.max(0,highPrice-Math.max(o,cl));
+  const lowerWick=Math.max(0,Math.min(o,cl)-lowPrice);
+  if((long&&upperWick>=body*0.5)||(short&&lowerWick>=body*0.5))continue;
   if(long||short){found++;onMatch({symbol,tf,side:long?'多头':'空头',signalTime:t,entryTime:Number(next[0]),entry:Number(next[1]),signalClose:cl,ema:[...ema]})}
  }
  return {found,checked,skipped};

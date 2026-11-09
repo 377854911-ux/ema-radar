@@ -78,7 +78,7 @@ $('start').onclick=async()=>{
    const money=n=>Number(n).toFixed(2);
    const invalid=portfolio.trades.filter(t=>t.exitType==='signal_invalid').length;
    const early=portfolio.trades.filter(t=>t.exitType==='forming_early_tp').length;
-   $('summary').textContent='1分钟K线模拟（非逐笔行情）｜发现候选信号 '+outcome.candidates.length+' 次｜模拟入场 '+outcome.rows.length+' 笔｜已平仓 '+st.count+' 笔｜最后一分钟才形成 '+outcome.excluded.late+' 次｜持仓冲突 '+outcome.excluded.occupied+' 次｜止损价无效 '+outcome.excluded.invalid+' 次｜同一分钟止盈止损冲突 '+outcome.excluded.ambiguous+' 次｜形成中提前止盈 '+early+' 笔｜信号失效平仓 '+invalid+' 笔｜胜率 '+money(st.winRate)+'%｜净盈亏 '+money(st.net)+' USDT｜收益率 '+money(st.returnPct)+'%｜数据缺口 '+outcome.excluded.incomplete+' 根｜资金费率未计入';
+   $('summary').textContent='1分钟K线模拟（非逐笔行情）｜收盘确认信号 '+outcome.closedSignals.length+' 次｜其中形成中漏检 '+outcome.closedSignals.filter(x=>!x.matched).length+' 次｜发现候选信号 '+outcome.candidates.length+' 次｜模拟入场 +outcome.rows.length+' 笔｜已平仓 '+st.count+' 笔｜最后一分钟才形成 '+outcome.excluded.late+' 次｜持仓冲突 '+outcome.excluded.occupied+' 次｜止损价无效 '+outcome.excluded.invalid+' 次｜同一分钟止盈止损冲突 '+outcome.excluded.ambiguous+' 次｜形成中提前止盈 '+early+' 笔｜信号失效平仓 '+invalid+' 笔｜胜率 '+money(st.winRate)+'%｜净盈亏 '+money(st.net)+' USDT｜收益率 '+money(st.returnPct)+'%｜数据缺口 '+outcome.excluded.incomplete+' 根｜资金费率未计入';
    root.replaceChildren();
    for(const t of [...portfolio.trades].sort((a,b)=>b.entryTime-a.entryTime)){
     const card=document.createElement('div');card.className='panel';
@@ -95,6 +95,12 @@ $('start').onclick=async()=>{
     const item=document.createElement('div');item.className='panel';
     item.textContent=candidate.symbol+' · '+candidate.tf+' · '+candidate.side+' ｜ 发现 '+fmt(candidate.detectedTime)+' ｜ '+candidate.status;
     candidateRoot.append(item);
+   }
+   const heading=document.createElement('h3');heading.textContent='收盘信号独立核验（'+outcome.closedSignals.length+' 个）';candidateRoot.prepend(heading);
+   for(const x of [...outcome.closedSignals].filter(x=>!x.matched).sort((a,b)=>b.signalTime-a.signalTime)){
+    const item=document.createElement('div');item.className='panel';
+    item.textContent=x.symbol+' · '+x.tf+' · '+x.side+' ｜ 信号K线 '+fmt(x.signalTime)+' ｜ 收盘确认有效，但形成中未发现候选';
+    candidateRoot.insertBefore(item,heading.nextSibling);
    }
    if(!outcome.candidates.length)candidateRoot.textContent='没有检测到符合条件的候选信号';
    $('results').textContent='候选 '+outcome.candidates.length+' 次，入场 '+outcome.rows.length+' 次；回测按1分钟已完成K线判断，不等于逐笔成交重放。';

@@ -59,6 +59,40 @@ $('start').onclick=async()=>{
  if(!/^[A-Z0-9]{3,30}USDT$/.test(symbol)){ $('status').textContent='请输入有效的USDT合约交易对，例如 BTCUSDT';return}
  aborter=new AbortController();$('start').disabled=true;$('tradeResults').textContent='正在扫描，尚未生成已平仓交易';resetBacktestStats();progress(0,1,'准备扫描');$('summary').textContent='正在回测 · 临时统计';$('results').replaceChildren();$('count').textContent='0';
  try{
+  if($('scope').value==='single'&&$('singleEntryMode').value==='forming'){
+   const config=settings();
+   if(config.feeOnly!==false)config.funding=false;
+   config.formingEarlyTp=Number($('formingEarlyTp').value);
+   if(config.funding!==false)throw Error('当前实验回测暂不支持资金费率，请启用仅试算');
+   const info=await json(api+'/fapi/v1/exchangeInfo',aborter.signal);
+   if(!info.symbols.some(x=>x.symbol===symbol&&x.contractType==='PERPETUAL'&&x.quoteAsset==='USDT'))throw Error('不是币安USDT永续合约');
+   const outcome=await window.emaFormingBacktest(symbol,tfs,days,config,aborter.signal,info=>{$('status').textContent=info});
+   $('count').textContent=String(outcome.rows.length);
+   const root=$('tradeResults');
+   const portfolio=config.positionMode==='martingale'?window.emaMartingale(outcome.trades,config):window.emaPortfolio(outcome.trades,{...config,maxPositions:1e6});
+   const st=portfolio.stats;
+   updateBacktestStats(st);
+   $('rrDisplay').textContent='信号收盘后止盈：K线涨跌幅 × '+Number(config.rr??1).toFixed(2);
+   $('actualRR').textContent='实际平均盈亏比：'+(st.realizedRR===null?'暂无足够盈亏样本':'1:'+st.realizedRR.toFixed(2));
+   const money=n=>Number(n).toFixed(2);
+   const invalid=portfolio.trades.filter(t=>t.exitType==='signal_invalid').length;
+   const early=portfolio.trades.filter(t=>t.exitType==='forming_early_tp').length;
+   $('summary').textContent='1分钟K线模拟（非逐笔行情）｜信号形成中入场 '+outcome.rows.length+' 笔｜已平仓 '+st.count+' 笔｜形成中提前止盈 '+early+' 笔｜信号失效平仓 '+invalid+' 笔｜胜率 '+money(st.winRate)+'%｜净盈亏 '+money(st.net)+' USDT｜收益率 '+money(st.returnPct)+'%｜数据缺口 '+outcome.excluded.incomplete+' 根｜同一分钟触发冲突排除 '+outcome.excluded.ambiguous+' 笔｜资金费率未计入';
+   root.replaceChildren();
+   for(const t of [...portfolio.trades].sort((a,b)=>b.entryTime-a.entryTime)){
+    const card=document.createElement('div');card.className='panel';
+    const title=document.createElement('strong');title.style.color=t.pnl>=0?'#ff656d':'#48d69a';
+    title.textContent=t.symbol+' · '+t.tf+' · '+t.side+' · '+(t.pnl>=0?'盈利 ':'亏损 ')+money(t.pnl)+' USDT';
+    const detail=document.createElement('p');detail.className='muted';
+    detail.textContent='入场 '+fmt(t.entryTime)+' @ '+Number(t.entry).toFixed(4)+' ｜ 平仓 '+fmt(t.exitTime)+' @ '+Number(t.exit).toFixed(4)+' ｜ 原因 '+({forming_early_tp:'信号形成中提前止盈',signal_invalid:'收盘信号失效',target:'收盘后止盈',stop:'止损',timeout:'时间到期'}[t.exitType]||t.exitType)+' ｜ 手续费 '+money(t.fee)+' USDT';
+    card.append(title,detail);root.append(card);
+   }
+   if(!portfolio.trades.length)root.textContent='尚无已平仓交易';
+   $('results').textContent='信号形成中进场：'+outcome.rows.length+' 次；仅使用完整1分钟K线，分钟内先后顺序未知不做确定性成交假设。';
+   progress(tfs.length,tfs.length,'实验回测');
+   $('status').textContent='实验回测完成：'+tfs.join('、')+' · '+outcome.minuteCount+' 根1分钟K线';
+   return;
+  }
   if($('scope').value==='market'){
    $('status').textContent='正在核验历史每日成交额排名…';
    const ranked=await window.emaHistoricalUniverse(days,Number(settings().topN??100),aborter.signal,p=>{$('status').textContent='历史排名：'+p.completed+'/'+p.total+' 个交易对，失败 '+p.failed;progress(p.completed,p.total,'历史排名')});
@@ -185,5 +219,5 @@ for(const el of document.querySelectorAll('input[name="tf"]'))el.addEventListene
 
 $('rrDisplay').textContent='盈亏比：1:'+(Number(settings().rr??1).toFixed(2));
 
-$('scope').addEventListener('change',()=>{$('symbolField').style.display=$('scope').value==='single'?'flex':'none';$('start').textContent='开始回测';});
+function syncFormingFields(){const single=$('scope').value==='single';$('symbolField').style.display=single?'flex':'none';$('formingModeField').style.display=single?'flex':'none';$('formingEarlyField').style.display=single&&$('singleEntryMode').value==='forming'?'flex':'none';$('start').textContent='开始回测';} $('scope').addEventListener('change',syncFormingFields);$('singleEntryMode').addEventListener('change',syncFormingFields);$('formingEarlyTp').addEventListener('change',()=>{try{localStorage.setItem('ema.backtest.formingEarlyTp',$('formingEarlyTp').value)}catch(e){}});try{const tp=localStorage.getItem('ema.backtest.formingEarlyTp');if(tp&&[...$('formingEarlyTp').options].some(o=>o.value===tp))$('formingEarlyTp').value=tp}catch(e){}
 $('scope').dispatchEvent(new Event('change'));

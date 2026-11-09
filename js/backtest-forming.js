@@ -58,7 +58,7 @@ window.emaFormingBacktest=async function(symbol,tfs,days,config,signal,onProgres
     const first=minuteMap.get(t),count=step/minMs;
     let complete=first!==undefined;
     if(complete){for(let j=0;j<count;j++){if(!minutes[first+j]||number(minutes[first+j],0)!==t+j*minMs){complete=false;break}}}
-    if(!complete){excluded.incomplete++;}
+    if(!complete){if(active)throw Error(tf+' 持仓期间1分钟历史K线不连续，已停止以避免错误盈亏');excluded.incomplete++;}
     else{
      for(let j=0;j<count;j++){
       const m=minutes[first+j],mt=number(m,0),mo=number(m,1),mh=number(m,2),ml=number(m,3),mc=number(m,4);

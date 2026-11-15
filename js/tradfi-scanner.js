@@ -25,7 +25,7 @@ try{if(audioContext.state!=='running')await audioContext.resume();status.textCon
 });
 document.addEventListener('visibilitychange',()=>{if(!document.hidden&&audioContext&&soundToggle.checked&&audioContext.state==='suspended')status.textContent='声音提醒需要点击「试听铃声」重新激活'});
 const tfMs={ '15m':900000,'30m':1800000,'1h':3600000,'2h':7200000,'4h':14400000,'6h':21600000,'8h':28800000,'12h':43200000,'1d':86400000 };
-const config=()=>{let s={};try{s=JSON.parse(localStorage.getItem('ema.settings.tradfi-scanner')||'{}')}catch{}return {timeframes:Array.isArray(s.timeframes)?s.timeframes.filter(x=>tfMs[x]):['15m','30m','1h','2h','4h','6h','8h','12h','1d'],directions:Array.isArray(s.directions)?s.directions:['long','short'],topN:Math.min(100,Math.max(1,Number(s.topN)||100)),maxMove:Number.isFinite(Number(s.maxMove))?Number(s.maxMove):30,ema:[Number(s.emaFast)||25,Number(s.emaMid)||50,Number(s.emaSlow)||100],excludeObservation:s.excludeObservation!==false,excludeDelist:s.excludeDelist!==false}};
+const config=()=>{let s={};try{s=JSON.parse(localStorage.getItem('ema.settings.tradfi-scanner')||'{}')}catch{}return {timeframes:Array.isArray(s.timeframes)?s.timeframes.filter(x=>tfMs[x]):['15m','30m','1h','2h','4h','6h','8h','12h','1d'],directions:Array.isArray(s.directions)?s.directions:['long','short'],topN:50,maxMove:Number.isFinite(Number(s.maxMove))?Number(s.maxMove):30,ema:[Number(s.emaFast)||25,Number(s.emaMid)||50,Number(s.emaSlow)||100],excludeObservation:s.excludeObservation!==false,excludeDelist:s.excludeDelist!==false}};
 const assetNames={stocks:'股票合约',metals:'黄金及贵金属',gas:'天然气',oil:'原油',etfs:'指数基金合约'};
 const assetChoices=document.querySelector('#assetChoices');
 let selectedAssets=new Set();
@@ -72,7 +72,7 @@ status.textContent='读取币安TradFi合约列表…';
 const [info,tickers]=await Promise.all([get('https://fapi.binance.com/fapi/v1/exchangeInfo'),get('https://fapi.binance.com/fapi/v1/ticker/24hr')]);
 if(cancelled)return;
 const allowed=new Map(info.symbols.filter(x=>x.contractType==='TRADIFI_PERPETUAL'&&x.quoteAsset==='USDT'&&x.status==='TRADING'&&selectedAssets.has(categoryOf(x))).map(x=>[x.symbol,x]));
-const ranked=tickers.filter(x=>allowed.has(x.symbol)&&Number.isFinite(Number(x.priceChangePercent))&&Math.abs(Number(x.priceChangePercent))<=s.maxMove).sort((a,b)=>Number(b.quoteVolume)-Number(a.quoteVolume));
+const ranked=tickers.filter(x=>allowed.has(x.symbol)&&Number.isFinite(Number(x.priceChangePercent))&&Math.abs(Number(x.priceChangePercent))<=s.maxMove).sort((a,b)=>Number(b.quoteVolume)-Number(a.quoteVolume)||a.symbol.localeCompare(b.symbol)).slice(0,s.topN);
 if(!ranked.length){results.textContent='没有找到可扫描的已上市传统金融合约；请检查品种选择、币安接口及所在地区的可用性';status.textContent='未发现符合条件的TradFi合约';return}
 const tasks=ranked.flatMap(t=>s.timeframes.map(tf=>({symbol:t.symbol,tf})));total=tasks.length;let cursor=0;
 const worker=async()=>{while(cursor<tasks.length&&!cancelled){const task=tasks[cursor++];try{const now=Date.now();const limit=Math.min(1000,Math.max(400,Math.max(...s.ema)*4+5));const raw=await get('https://fapi.binance.com/fapi/v1/klines?symbol='+encodeURIComponent(task.symbol)+'&interval='+task.tf+'&limit='+limit);const signals=signal(raw,s.ema,task.tf,now)||[];

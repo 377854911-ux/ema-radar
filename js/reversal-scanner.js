@@ -16,10 +16,37 @@ function excluded(t){let text=[t.symbol,t.pair,t.contractType].join(' ').toUpper
 const tradWords=/XAU|XAG|XPT|XPD|GOLD|SILVER|PLATINUM|PALLADIUM|OIL|WTI|BRENT|NGAS|NATGAS|NATURALGAS|STOCK|EQUITY|ETF|INDEX|SPX|NDX|NASDAQ|DOW|DJI|TSLA|AAPL|NVDA|MSFT|AMZN|META|GOOGL|GOOG|COIN|MSTR/;
 function isTrad(t){return tradWords.test(t.symbol.toUpperCase())}
 async function universe(s){const [info,ticks]=await Promise.all([json(base+'/fapi/v1/exchangeInfo'),json(base+'/fapi/v1/ticker/24hr')]);const lookup=new Map(ticks.map(t=>[t.symbol,t]));let groups={crypto:[],trad:[]};for(const t of info.symbols){if(excluded(t))continue;const tick=lookup.get(t.symbol);if(!tick)continue;const change=Number(tick.priceChangePercent),volume=Number(tick.quoteVolume);if(!Number.isFinite(change)||!Number.isFinite(volume))continue;if(s.changeOn&&Math.abs(change)>s.changePct)continue;const kind=isTrad(t)?'trad':'crypto';groups[kind].push({symbol:t.symbol,volume,kind})}for(const kind of ['crypto','trad'])groups[kind].sort((a,b)=>b.volume-a.volume);return [...(s.cryptoOn?groups.crypto.slice(0,s.cryptoCount):[]),...(s.tradOn?groups.trad.slice(0,s.tradCount):[])]}
-function evaluate(rows,s){if(!Array.isArray(rows)||rows.length<3)return null;const now=Date.now(),last=rows[rows.length-1],closed=Number(last[6])<now,second=closed?last:rows[rows.length-1],first=rows[rows.length-2];if(Number(first[6])>=now)return null;let o1=Number(first[1]),c1=Number(first[4]),o2=Number(second[1]),c2=Number(second[4]);if(![o1,c1,o2,c2].every(Number.isFinite)||o1<=0||o2<=0)return null;const p1=(c1-o1)/o1*100,p2=(c2-o2)/o2*100;if(p1*p2>=0||Math.abs(p1)<s.firstPct||Math.abs(p2)<s.secondPct)return null;return {p1,p2,vol1:Number(first[5]),vol2:Number(second[5]),time:Number(second[0]),closed,dir:p2>0?'bull':'bear'}}
+function evaluate(first,second,s,now){
+  if(!first||!second||Number(first[6])+1!==Number(second[0])||Number(first[6])>=now)return null;
+  const o1=Number(first[1]),c1=Number(first[4]),o2=Number(second[1]),c2=Number(second[4]);
+  if(![o1,c1,o2,c2].every(Number.isFinite)||o1<=0||o2<=0)return null;
+  const p1=(c1-o1)/o1*100,p2=(c2-o2)/o2*100;
+  if(p1*p2>=0||Math.abs(p1)<s.firstPct||Math.abs(p2)<s.secondPct)return null;
+  return {p1,p2,vol1:Number(first[5]),vol2:Number(second[5]),time:Number(second[0]),closed:Number(second[6])<now,dir:p2>0?'bull':'bear'};
+}
+function latestSignals(rows,s,now=Date.now()){
+  if(!Array.isArray(rows)||rows.length<2)return [];
+  const last=rows.length-1;
+  const hasOpenCandle=Number(rows[last][6])>=now;
+  const closedIndex=hasOpenCandle?last-1:last;
+  const confirmed=evaluate(rows[closedIndex-1],rows[closedIndex],s,now);
+  const pending=hasOpenCandle?evaluate(rows[last-1],rows[last],s,now):null;
+  return [confirmed,pending].filter(Boolean);
+}
 function esc(x){return String(x).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
 function render(){const values=[...signals.values()].sort((a,b)=>b.detected-a.detected);$('counter').textContent=values.length+'条';$('results').innerHTML=values.length?values.map(v=>'<div class="signal"><div><b>'+esc(v.symbol)+'</b> · '+esc(v.tf)+' <span class="'+v.dir+'">'+(v.dir==='bull'?'↑ 看涨反转':'↓ 看跌反转')+'</span> <span class="pill">'+(v.closed?'已确认':'形成中')+'</span></div><div class="meta">'+(v.kind==='trad'?'传统金融':'加密货币')+' · '+new Date(v.time).toLocaleString()+'<div>第一根实体 '+v.p1.toFixed(2)+'%　成交量 '+v.vol1.toLocaleString()+'</div><div>第二根实体 '+v.p2.toFixed(2)+'%　成交量 '+v.vol2.toLocaleString()+'</div></div></div>').join(''):'尚无符合条件的最新信号'}
-async function scan(){if(running)return;let s;try{s=save()}catch(e){status(e.message);return}running=true;stopped=false;const id=++runId;let done=0,errors=0,found=0;progress(0,1);status('读取合约列表…');try{const list=await universe(s);if(stopped||id!==runId)return;const tasks=list.flatMap(t=>s.periods.map(tf=>({...t,tf})));if(!tasks.length){status('没有符合筛选条件的合约');return}const valid=new Set(tasks.map(t=>t.symbol+'|'+t.tf));for(const key of signals.keys())if(!valid.has(key))signals.delete(key);render();let index=0;const workers=Array.from({length:Math.min(5,tasks.length)},async()=>{while(index<tasks.length&&!stopped&&id===runId){const task=tasks[index++];try{const data=await json(base+'/fapi/v1/klines?symbol='+encodeURIComponent(task.symbol)+'&interval='+task.tf+'&limit=4');const v=evaluate(data,s),key=task.symbol+'|'+task.tf;if(v){const old=signals.get(key);signals.set(key,{...task,...v,detected:old&&old.time===v.time?old.detected:Date.now()});found++;if(!v.closed&&!alerted.has(key+'|'+v.time)){alerted.add(key+'|'+v.time);sound()}}else signals.delete(key);render()}catch(e){errors++}finally{done++;progress(done,tasks.length);status('已扫描 '+done+'/'+tasks.length+' · 当前信号 '+signals.size+' · 请求失败 '+errors)}}});await Promise.all(workers);if(!stopped)status('扫描完成 · '+done+'组 · 信号 '+signals.size+' · 请求失败 '+errors+(errors?'（部分数据未能获取）':''))}catch(e){status('扫描失败：'+e.message+'。请检查网络或币安行情接口访问权限')}finally{running=false;if(stopped)status('扫描已停止');schedule()}}
+async function scan(){if(running)return;let s;try{s=save()}catch(e){status(e.message);return}running=true;stopped=false;const id=++runId;let done=0,errors=0;progress(0,1);status('读取合约列表…');try{const list=await universe(s);if(stopped||id!==runId)return;const tasks=list.flatMap(t=>s.periods.map(tf=>({...t,tf})));if(!tasks.length){status('没有符合筛选条件的合约');return}const valid=new Set(tasks.flatMap(t=>['closed','pending'].map(state=>t.symbol+'|'+t.tf+'|'+state)));for(const key of signals.keys())if(!valid.has(key))signals.delete(key);render();let index=0;const workers=Array.from({length:Math.min(5,tasks.length)},async()=>{while(index<tasks.length&&!stopped&&id===runId){const task=tasks[index++];try{const data=await json(base+'/fapi/v1/klines?symbol='+encodeURIComponent(task.symbol)+'&interval='+task.tf+'&limit=4');if(stopped||id!==runId)return;
+const baseKey=task.symbol+'|'+task.tf;
+const matches=latestSignals(data,s);
+for(const state of ['closed','pending']){
+  const key=baseKey+'|'+state;
+  const v=matches.find(signal=>signal.closed===(state==='closed'));
+  if(!v){signals.delete(key);continue}
+  const old=signals.get(key);
+  signals.set(key,{...task,...v,detected:old?.time===v.time?old.detected:Date.now()});
+  if(!v.closed&&!alerted.has(key+'|'+v.time)){alerted.add(key+'|'+v.time);sound()}
+}
+render()}catch(e){errors++}finally{done++;progress(done,tasks.length);status('已扫描 '+done+'/'+tasks.length+' · 当前信号 '+signals.size+' · 请求失败 '+errors)}}});await Promise.all(workers);if(!stopped)status('扫描完成 · '+done+'组 · 信号 '+signals.size+' · 请求失败 '+errors+(errors?'（部分数据未能获取）':''))}catch(e){status('扫描失败：'+e.message+'。请检查网络或币安行情接口访问权限')}finally{running=false;if(stopped)status('扫描已停止');schedule()}}
 function schedule(){clearTimeout(timer);if($('autoOn').checked&&!stopped){const s=get();timer=setTimeout(scan,Math.max(10,s.interval)*1000)}}
 $('scan').onclick=()=>{stopped=false;scan()};$('stop').onclick=()=>{stopped=true;runId++;clearTimeout(timer);status('已停止')};$('save').onclick=()=>{try{save();status('设置已保存');schedule()}catch(e){status(e.message)}};$('test').onclick=()=>{try{audio=audio||new(window.AudioContext||window.webkitAudioContext)();audio.resume();sound()}catch(e){status('浏览器未允许播放声音')}};$('autoOn').onchange=()=>{try{save();if($('autoOn').checked){stopped=false;scan()}else{clearTimeout(timer);status('自动扫描已关闭')}}catch(e){status(e.message)}};window.addEventListener('pagehide',()=>clearTimeout(timer));render();if($('autoOn').checked)scan();
 })();

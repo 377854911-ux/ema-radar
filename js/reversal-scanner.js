@@ -24,13 +24,27 @@ function evaluate(first,second,s,now){
   if(p1*p2>=0||Math.abs(p1)<s.firstPct||Math.abs(p2)<s.secondPct)return null;
   return {p1,p2,vol1:Number(first[5]),vol2:Number(second[5]),time:Number(second[0]),closed:Number(second[6])<now,dir:p2>0?'bull':'bear'};
 }
+function reversalAfterTrend(rows,index,s,now){
+  const before=rows[index-2],first=rows[index-1],second=rows[index];
+  const signal=evaluate(first,second,s,now);
+  if(!signal||!before||Number(before[6])+1!==Number(first[0]))return null;
+
+  const previousClose=Number(before[4]),trendClose=Number(first[4]),signalClose=Number(second[4]);
+  if(![previousClose,trendClose,signalClose].every(price=>Number.isFinite(price)&&price>0))return null;
+
+  // A move against the preceding close ends the current price leg.
+  const trendMove=trendClose-previousClose;
+  const reversalMove=signalClose-trendClose;
+  if(signal.dir==='bear')return trendMove>0&&reversalMove<0?signal:null;
+  return trendMove<0&&reversalMove>0?signal:null;
+}
 function latestSignals(rows,s,now=Date.now()){
   if(!Array.isArray(rows)||rows.length<2)return [];
   const last=rows.length-1;
   const hasOpenCandle=Number(rows[last][6])>=now;
   const closedIndex=hasOpenCandle?last-1:last;
-  const confirmed=evaluate(rows[closedIndex-1],rows[closedIndex],s,now);
-  const pending=hasOpenCandle?evaluate(rows[last-1],rows[last],s,now):null;
+  const confirmed=reversalAfterTrend(rows,closedIndex,s,now);
+  const pending=hasOpenCandle?reversalAfterTrend(rows,last,s,now):null;
   return [confirmed,pending].filter(Boolean);
 }
 function esc(x){return String(x).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
